@@ -22,8 +22,6 @@ TREAT_AS_RAW = {
     "Blue Power Slug", "Yellow Power Slug", "Purple Power Slug", "Power Shard",
     "Hatcher Remains", "Hog Remains", "Spitter Remains", "Stinger Remains",
     "Bacon Agaric", "Beryl Nut", "Paleberry",
-    "Excited Photonic Matter",
-    "Reanimated SAM",
     "Plutonium Waste", "Uranium Waste",
     "Dissolved Silica",
 }
