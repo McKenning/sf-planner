@@ -216,7 +216,7 @@
             <tr class="{{ 'target' if p.is_target else ('raw' if p.is_raw else '') }}">
               <td class="product">
                 {{ p.name }}
-                {% if p.is_target %}<span class="fuel-badge">FUEL</span>{% endif %}
+                {% if p.is_target and p.name == pp.fuel_type %}<span class="fuel-badge">FUEL</span>{% endif %}
                 {% if p.is_raw %}<span class="raw-badge">RAW</span>{% endif %}
               </td>
               <td class="right">{{ "{:,.2f}".format(p.total_per_min) }}</td>
@@ -287,7 +287,7 @@
 </main>
 
 <div class="footer-meta">
-  FICSIT PLANNER · <span class="accent">v0.2</span> · running on {{ hostname }}
+  FICSIT PLANNER · <span class="accent">v0.3</span> · running on {{ hostname }}
 </div>
 
 </body>

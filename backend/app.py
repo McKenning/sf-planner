@@ -680,7 +680,8 @@ def world_view(request: Request):
             "SELECT * FROM power_plants WHERE plan_id=? ORDER BY id", (plan_id,)
         ).fetchall()
         pp_total_gen = 0
-        world_waste = {}
+        world_waste = {}  # produced by generators
+        world_waste_consumed = {}  # consumed by fuel chains
         pp_details = []
 
         for pp in pplants:
@@ -718,6 +719,9 @@ def world_view(request: Request):
             world_power += pp_result["total_power"]
             for raw, rate in pp_result["raws"].items():
                 world_raws[raw] = world_raws.get(raw, 0) + rate
+                # Track waste consumed by fuel chains separately
+                if raw in ("Uranium Waste", "Plutonium Waste"):
+                    world_waste_consumed[raw] = world_waste_consumed.get(raw, 0) + rate
             for p in pp_result["products"]:
                 if p["name"] in world_products:
                     wp = world_products[p["name"]]
@@ -760,6 +764,7 @@ def world_view(request: Request):
         "total_power": world_power,
         "pp_total_generation": pp_total_gen,
         "world_waste": world_waste,
+        "world_waste_consumed": world_waste_consumed,
         "machines_info": MACHINES,
         "hostname": HOSTNAME,
     })
