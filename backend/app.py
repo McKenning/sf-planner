@@ -123,13 +123,15 @@ def get_active_plan_id(conn) -> int:
     return row["id"] if row else None
 
 
+# Miner rates at 250% overclock (base * 2.5)
+# Mk.1: 60/120/300  Mk.2: 120/240/600  Mk.3: 240/480/1200 (capped at belt speed in-game)
 MINER_RATES_PER_PURITY = {
-    "Mk.1": {"pure": 120, "normal": 60, "impure": 30},
-    "Mk.2": {"pure": 240, "normal": 120, "impure": 60},
-    "Mk.3": {"pure": 480, "normal": 240, "impure": 120},
+    "Mk.1": {"pure": 300, "normal": 150, "impure": 75},
+    "Mk.2": {"pure": 600, "normal": 300, "impure": 150},
+    "Mk.3": {"pure": 1200, "normal": 600, "impure": 300},
 }
-# Oil/Water/Nitrogen use extractor rates - just use Mk.2 equivalent rates
-EXTRACTOR_RATES = {"pure": 240, "normal": 120, "impure": 60}
+# Oil Extractor / Resource Well at 250% overclock (base 120 * 2.5 = 300 per normal)
+EXTRACTOR_RATES = {"pure": 600, "normal": 300, "impure": 150}
 
 
 def calculate_available(resource: str, pure: int, normal: int, impure: int, tier: str) -> float:

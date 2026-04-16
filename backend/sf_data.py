@@ -52,7 +52,7 @@ MINER_RATES = {
 # Source: user's Resources sheet image + satisfactory-calculator node totals
 # Format: {resource: {"pure": n_nodes, "normal": n_nodes, "impure": n_nodes, "total_mk2": items_per_min_total}}
 RESOURCES = {
-    "Limestone":     {"pure": 30, "normal": 49, "impure": 15, "total_mk2": 69900},
+    "Limestone":     {"pure": 29, "normal": 50, "impure": 15, "total_mk2": 69900},
     "Iron Ore":      {"pure": 46, "normal": 42, "impure": 39, "total_mk2": 92100},
     "Copper Ore":    {"pure": 13, "normal": 29, "impure": 13, "total_mk2": 36900},
     "Caterium Ore":  {"pure": 8,  "normal": 9,  "impure": 0,  "total_mk2": 15000},
