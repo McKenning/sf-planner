@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FICSIT Planner — Power Budget</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-deep: #0a0e14; --bg: #11161e; --bg-elev: #1a212c; --bg-elev2: #232c3a;
+    --border: #2c3645; --border-bright: #3d4a5e;
+    --text: #d6dde8; --text-dim: #8a96aa; --text-faint: #5a6478;
+    --accent: #ff7e1c; --accent-glow: rgba(255, 126, 28, 0.15);
+    --good: #4ade80; --warn: #fbbf24; --bad: #ef4444;
+    --bad-bg: rgba(239, 68, 68, 0.1); --good-bg: rgba(74, 222, 128, 0.1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--bg-deep); color: var(--text);
+    font-family: 'Inter', system-ui, sans-serif; font-size: 14px; line-height: 1.5; min-height: 100vh;
+  }
+  body {
+    background-image:
+      radial-gradient(circle at 50% 0%, rgba(74, 222, 128, 0.03) 0%, transparent 40%),
+      linear-gradient(180deg, var(--bg-deep) 0%, var(--bg) 100%);
+  }
+  header {
+    position: sticky; top: 0; z-index: 100; background: var(--bg-deep);
+    border-bottom: 1px solid var(--border); padding: 14px 24px;
+    display: flex; align-items: center; gap: 24px; backdrop-filter: blur(8px);
+  }
+  header h1 { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 2px; color: var(--accent); line-height: 1; }
+  header h1 .sub { color: var(--text-dim); font-size: 12px; letter-spacing: 4px; margin-left: 8px; }
+  nav { display: flex; gap: 4px; margin-left: auto; }
+  nav a { color: var(--text-dim); text-decoration: none; padding: 6px 14px; border-radius: 4px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; transition: all 0.15s; }
+  nav a:hover { color: var(--accent); background: var(--accent-glow); }
+  nav a.active { color: var(--accent); background: var(--accent-glow); }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px; }
+  .panel { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin-bottom: 16px; }
+  .panel-header { padding: 12px 16px; background: var(--bg-elev2); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .panel-header h2 { font-family: 'Bebas Neue', sans-serif; font-size: 16px; letter-spacing: 2px; color: var(--text); }
+  .panel-header .meta { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim); }
+  .panel-body { padding: 12px 16px; }
+
+  /* Net power card */
+  .net-power-card {
+    display: grid; grid-template-columns: 1fr auto 1fr; gap: 24px; align-items: center;
+    padding: 20px 24px; margin-bottom: 20px;
+    background: linear-gradient(135deg, var(--bg-elev2) 0%, var(--bg-elev) 100%);
+    border: 1px solid var(--border); border-radius: 6px;
+  }
+  .net-power-card .side { text-align: center; }
+  .net-power-card .side .label { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: var(--text-dim); margin-bottom: 4px; }
+  .net-power-card .side .value { font-family: 'Bebas Neue', sans-serif; font-size: 42px; line-height: 1; letter-spacing: 1px; }
+  .net-power-card .side .unit { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-dim); margin-left: 2px; }
+  .net-power-card .arrow { font-size: 32px; color: var(--text-faint); }
+  .net-power-card .gen-value { color: var(--good); }
+  .net-power-card .con-value { color: var(--accent); }
+
+  .net-card {
+    text-align: center; padding: 16px; margin-bottom: 20px;
+    border-radius: 6px; font-family: 'Bebas Neue', sans-serif;
+  }
+  .net-card .label { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: var(--text-dim); margin-bottom: 4px; font-family: 'Inter', sans-serif; font-weight: 600; }
+  .net-card .value { font-size: 56px; line-height: 1; }
+  .net-card .unit { font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--text-dim); }
+  .net-positive { background: var(--good-bg); border: 1px solid var(--good); }
+  .net-positive .value { color: var(--good); }
+  .net-negative { background: var(--bad-bg); border: 1px solid var(--bad); }
+  .net-negative .value { color: var(--bad); }
+  .net-zero { background: var(--bg-elev2); border: 1px solid var(--border); }
+  .net-zero .value { color: var(--text-dim); }
+
+  /* Table styles */
+  table.power-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.power-table th {
+    text-align: left; padding: 8px 12px; font-size: 10px; font-weight: 700;
+    color: var(--text-dim); text-transform: uppercase; letter-spacing: 1.5px;
+    border-bottom: 1px solid var(--border-bright); background: var(--bg-elev2);
+  }
+  table.power-table th.right, table.power-table td.right { text-align: right; }
+  table.power-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  table.power-table tr:hover td { background: rgba(255,126,28,0.04); }
+  .mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .gen-mw { color: var(--good); font-weight: 700; }
+  .con-mw { color: var(--accent); font-weight: 700; }
+
+  /* Fuel demand */
+  .fuel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+  .fuel-cell {
+    background: var(--bg-deep); border: 1px solid var(--border); border-left: 3px solid var(--warn);
+    border-radius: 3px; padding: 8px 10px;
+  }
+  .fuel-cell .name { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
+  .fuel-cell .rate { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 700; color: var(--text); }
+  .fuel-cell .rate-unit { font-size: 11px; color: var(--text-faint); }
+
+  .footer-meta { text-align: center; padding: 24px; font-size: 11px; color: var(--text-faint); font-family: 'JetBrains Mono', monospace; }
+  .footer-meta .accent { color: var(--accent); }
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--text-faint); }
+  .empty-state a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>FICSIT PLANNER <span class="sub">// POWER BUDGET</span></h1>
+  <nav>
+    <a href="/">Planner</a>
+    <a href="/world">World</a>
+    <a href="/power" class="active">Power</a>
+  </nav>
+</header>
+
+<main>
+
+{% if not pp_stats and not factory_power %}
+  <div class="empty-state">
+    <div style="font-size: 64px; margin-bottom: 16px;">⚡</div>
+    <div>No power plants or factories yet.</div>
+    <div style="margin-top: 8px;"><a href="/">Go to the Planner</a> to add power plants and save factories.</div>
+  </div>
+{% else %}
+
+  <!-- Net power summary -->
+  {% set net_cls = 'net-positive' if net_power > 0 else ('net-negative' if net_power < 0 else 'net-zero') %}
+  <div class="net-card {{ net_cls }}">
+    <div class="label">Net Power</div>
+    <div class="value">{{ "{:+,.0f}".format(net_power) }}<span class="unit">MW</span></div>
+  </div>
+
+  <!-- Generation vs Consumption -->
+  <div class="net-power-card">
+    <div class="side">
+      <div class="label">Generation</div>
+      <div class="value gen-value">{{ "{:,.0f}".format(total_generation) }}<span class="unit">MW</span></div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="side">
+      <div class="label">Consumption</div>
+      <div class="value con-value">{{ "{:,.0f}".format(total_consumption) }}<span class="unit">MW</span></div>
+    </div>
+  </div>
+
+  <!-- Power Plants -->
+  {% if pp_stats %}
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Power Plants</h2>
+      <span class="meta gen-mw">{{ "{:,.0f}".format(total_generation) }} MW</span>
+    </div>
+    <div class="panel-body" style="padding: 0;">
+      <table class="power-table">
+        <thead>
+          <tr>
+            <th>Generator</th>
+            <th>Fuel</th>
+            <th class="right">Count</th>
+            <th class="right">Clock</th>
+            <th class="right">Fuel /min</th>
+            <th class="right">Output</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for pp in pp_stats %}
+          <tr>
+            <td><strong>{{ pp.generator_type }}</strong></td>
+            <td class="mono">{{ pp.fuel_type }}</td>
+            <td class="right mono">{{ pp.count }}</td>
+            <td class="right mono">{{ pp.clock_pct|int }}%</td>
+            <td class="right mono">{{ "{:,.1f}".format(pp.fuel_per_min) }}</td>
+            <td class="right mono gen-mw">{{ "{:,.0f}".format(pp.mw_total) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Fuel Demand -->
+  {% if pp_fuel_demand %}
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Power Plant Fuel Demand</h2>
+    </div>
+    <div class="panel-body">
+      <div class="fuel-grid">
+        {% for fuel, rate in pp_fuel_demand.items() %}
+        <div class="fuel-cell">
+          <div class="name">{{ fuel }}</div>
+          <div class="rate">{{ "{:,.1f}".format(rate) }} <span class="rate-unit">/min</span></div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Factory Consumption -->
+  {% if factory_power %}
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Factory Consumption</h2>
+      <span class="meta con-mw">{{ "{:,.0f}".format(total_consumption) }} MW</span>
+    </div>
+    <div class="panel-body" style="padding: 0;">
+      <table class="power-table">
+        <thead>
+          <tr>
+            <th>Factory</th>
+            <th>Targets</th>
+            <th class="right">Power</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for f in factory_power %}
+          <tr>
+            <td><strong>{{ f.name }}</strong></td>
+            <td class="mono" style="color: var(--text-dim);">
+              {% for t in f.targets %}{{ t.product }} ({{ "{:,.1f}".format(t.rate_per_min) }}){{ ", " if not loop.last }}{% endfor %}
+            </td>
+            <td class="right mono con-mw">{{ "{:,.0f}".format(f.power_mw) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+{% endif %}
+
+</main>
+
+<div class="footer-meta">
+  FICSIT PLANNER · <span class="accent">v0.1</span> · running on {{ hostname }}
+</div>
+
+</body>
+</html>

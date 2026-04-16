@@ -516,6 +516,51 @@
   }
   .save-factory-form input[type=text] { flex: 1; }
 
+
+  /* Power plants */
+  .pp-row {
+    display: grid;
+    grid-template-columns: auto 1fr 70px 60px 70px auto;
+    gap: 6px;
+    align-items: center;
+    padding: 6px 8px;
+    background: var(--bg-deep);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    margin-bottom: 6px;
+  }
+  .pp-row .pp-type {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .pp-row .pp-fuel { font-size: 12px; color: var(--text-dim); }
+  .pp-row .pp-output {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--good);
+    font-weight: 700;
+    text-align: right;
+  }
+  .pp-add-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr 70px 60px auto;
+    gap: 6px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    align-items: center;
+  }
+  .pp-add-form select, .pp-add-form input { font-size: 12px; padding: 4px 6px; }
+  .pp-generation {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--good);
+    font-weight: 700;
+    font-size: 14px;
+  }
+
   /* Responsive */
   @media (max-width: 1100px) {
     main { grid-template-columns: 1fr; }
@@ -531,6 +576,7 @@
     <a href="#choices">Recipes</a>
     <a href="#resources">Resources</a>
     <a href="/world">World</a>
+    <a href="/power">Power</a>
     <a href="/api/plan/export" target="_blank">Export</a>
   </nav>
 </header>
@@ -663,6 +709,62 @@
       </div>
     </div>
 
+    <!-- Power Plants panel -->
+    <div class="panel" id="power" style="margin-top: 16px;">
+      <div class="panel-header">
+        <h2>Power Plants</h2>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          {% if pp_stats %}
+          <span class="pp-generation">{{ "{:,.0f}".format(pp_total_generation) }} MW</span>
+          {% endif %}
+          <span class="meta">{{ pp_stats|length }} plants</span>
+        </div>
+      </div>
+      <div class="panel-body">
+        {% for pp in pp_stats %}
+        <div class="pp-row">
+          <span class="pp-type">{{ pp.generator_type|replace(' Generator','')|replace(' Power Plant','') }}</span>
+          <span class="pp-fuel">{{ pp.fuel_type }} ({{ "{:,.1f}".format(pp.fuel_per_min) }}/min)</span>
+          <form method="post" action="/api/powerplants/{{ pp.id }}/update" style="display:contents">
+            <input type="number" name="count" value="{{ pp.count }}" min="1" step="1"
+                   style="width:60px; padding:2px 4px; font-size:11px; text-align:right; -moz-appearance:textfield;"
+                   onchange="this.form.submit()" title="Number of generators">
+            <input type="number" name="clock_pct" value="{{ pp.clock_pct|int }}" min="1" max="250" step="1"
+                   style="width:52px; padding:2px 4px; font-size:11px; text-align:right; -moz-appearance:textfield;"
+                   onchange="this.form.submit()" title="Clock speed %">
+          </form>
+          <span class="pp-output" title="{{ "{:,.0f}".format(pp.mw_total) }} MW">{{ "{:,.0f}".format(pp.mw_total) }}</span>
+          <form method="post" action="/api/powerplants/{{ pp.id }}/delete" style="display:inline">
+            <button type="submit" class="danger" title="Remove" style="padding:2px 6px;">×</button>
+          </form>
+        </div>
+        {% endfor %}
+
+        {% if pp_fuel_demand %}
+        <div style="margin: 8px 0; padding: 6px 8px; background: var(--bg-deep); border-radius: 3px; font-size: 11px; color: var(--text-dim);">
+          <strong style="color: var(--text);">Fuel demand:</strong>
+          {% for fuel, rate in pp_fuel_demand.items() %}
+            {{ fuel }} {{ "{:,.1f}".format(rate) }}/min{{ ", " if not loop.last }}
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <form class="pp-add-form" method="post" action="/api/powerplants/add">
+          <input type="hidden" name="plan_id" value="{{ plan_id }}">
+          <select name="generator_type" id="pp-gen-select" onchange="updateFuelOptions()">
+            {% for gtype in generators %}
+            <option value="{{ gtype }}">{{ gtype }}</option>
+            {% endfor %}
+          </select>
+          <select name="fuel_type" id="pp-fuel-select">
+          </select>
+          <input type="number" name="count" value="1" min="1" step="1" placeholder="#" title="Count">
+          <input type="number" name="clock_pct" value="100" min="1" max="250" step="1" placeholder="%" title="Clock %">
+          <button type="submit">Add</button>
+        </form>
+      </div>
+    </div>
+
   </aside>
 
   <!-- RIGHT COLUMN: Chain + Power + Budget -->
@@ -670,8 +772,18 @@
 
     <!-- Power summary -->
     <div class="power-card">
-      <div class="label">Total Power Demand</div>
+      <div class="label">Factory Power Demand</div>
       <div class="value">{{ "{:,.0f}".format(result.total_power) }}<span class="unit">MW</span></div>
+      {% if pp_stats %}
+      <div style="margin-top: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px;">
+        <span style="color: var(--good);">+{{ "{:,.0f}".format(pp_total_generation) }} MW generation</span>
+        <span style="color: var(--text-dim); margin: 0 4px;">→</span>
+        {% set net = pp_total_generation - result.total_power %}
+        <span style="color: {{ 'var(--good)' if net >= 0 else 'var(--bad)' }};">
+          {{ "{:+,.0f}".format(net) }} MW net
+        </span>
+      </div>
+      {% endif %}
     </div>
 
     <!-- Budget grid -->
@@ -836,6 +948,23 @@
       sessionStorage.setItem('choices-open', details.open ? '1' : '0');
     });
   }
+</script>
+
+
+<script>
+  // Dynamic fuel type dropdown based on generator type selection
+  const generatorFuels = {
+    {% for gtype, gdata in generators.items() %}
+    "{{ gtype }}": [{% for fuel in gdata.fuels %}"{{ fuel }}"{{ ", " if not loop.last }}{% endfor %}],
+    {% endfor %}
+  };
+  function updateFuelOptions() {
+    const genSelect = document.getElementById('pp-gen-select');
+    const fuelSelect = document.getElementById('pp-fuel-select');
+    const fuels = generatorFuels[genSelect.value] || [];
+    fuelSelect.innerHTML = fuels.map(f => '<option value="' + f + '">' + f + '</option>').join('');
+  }
+  updateFuelOptions();
 </script>
 
 </body>

@@ -180,3 +180,38 @@ ALT_TIERS = {
     "Alternate: Charcoal": "F",
 }
 print(f"Module loaded. Machines: {len(MACHINES)}, Resources: {len(RESOURCES)}, Tiered alts: {len(ALT_TIERS)}")
+
+
+# Power generators: type -> {power_mw, fuels: {fuel: consumption_per_min at 100%}}
+# All generators scale linearly with clock speed
+GENERATORS = {
+    "Coal Generator": {
+        "power_mw": 75,
+        "fuels": {
+            "Coal": 15,
+            "Compacted Coal": 7.143,
+            "Petroleum Coke": 25,
+        },
+        "water_per_min": 45,
+    },
+    "Fuel Generator": {
+        "power_mw": 250,
+        "fuels": {
+            "Fuel": 20,
+            "Liquid Biofuel": 20,
+            "Turbofuel": 7.5,
+            "Rocket Fuel": 4.167,
+            "Ionized Fuel": 3,
+        },
+        "water_per_min": 0,
+    },
+    "Nuclear Power Plant": {
+        "power_mw": 2500,
+        "fuels": {
+            "Uranium Fuel Rod": 0.2,
+            "Plutonium Fuel Rod": 0.1,
+            "Ficsonium Fuel Rod": 0.1,
+        },
+        "water_per_min": 240,
+    },
+}

@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from sf_recipes import RECIPES, RAW_RESOURCES
-from sf_data import MACHINES, RESOURCES as DEFAULT_RESOURCES, ALT_TIERS
+from sf_data import MACHINES, RESOURCES as DEFAULT_RESOURCES, ALT_TIERS, GENERATORS
 from solver import RecipeDB, solve, BUDGET_RAWS, TREAT_AS_RAW
 
 # ----- Setup -----
@@ -91,6 +91,16 @@ def init_db():
             product TEXT NOT NULL,
             rate_per_min REAL NOT NULL,
             FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS power_plants (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            plan_id INTEGER NOT NULL,
+            name TEXT NOT NULL DEFAULT '',
+            generator_type TEXT NOT NULL,
+            fuel_type TEXT NOT NULL,
+            count INTEGER NOT NULL DEFAULT 1,
+            clock_pct REAL NOT NULL DEFAULT 100,
+            FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE
         );
         CREATE TABLE IF NOT EXISTS clock_overrides (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -174,12 +184,17 @@ def load_plan_state(plan_id: int) -> dict:
             "SELECT product, clock_pct FROM clock_overrides WHERE plan_id=?",
             (plan_id,)
         ).fetchall()
+        pplants = conn.execute(
+            "SELECT * FROM power_plants WHERE plan_id=? ORDER BY id",
+            (plan_id,)
+        ).fetchall()
     return {
         "plan": dict(plan) if plan else None,
         "targets": [dict(t) for t in targets],
         "choices": {c["product"]: c["recipe"] for c in choices},
         "clocks": {c["product"]: c["clock_pct"] for c in clocks},
         "resources": [dict(r) for r in resources],
+        "power_plants": [dict(pp) for pp in pplants],
     }
 
 
@@ -211,11 +226,39 @@ def compute_plan(plan_id: int) -> dict:
             "ok": surplus >= 0,
         })
 
+    # Compute power plant stats
+    pp_stats = []
+    pp_total_generation = 0
+    pp_fuel_demand = {}  # fuel -> total per min needed
+    for pp in state.get("power_plants", []):
+        gen = GENERATORS.get(pp["generator_type"], {})
+        base_mw = gen.get("power_mw", 0)
+        fuel_rate = gen.get("fuels", {}).get(pp["fuel_type"], 0)
+        water_rate = gen.get("water_per_min", 0)
+        clock = pp["clock_pct"] / 100.0
+        total_mw = base_mw * pp["count"] * clock
+        total_fuel = fuel_rate * pp["count"] * clock
+        total_water = water_rate * pp["count"] * clock
+        pp_total_generation += total_mw
+        pp_fuel_demand[pp["fuel_type"]] = pp_fuel_demand.get(pp["fuel_type"], 0) + total_fuel
+        if total_water > 0:
+            pp_fuel_demand["Water"] = pp_fuel_demand.get("Water", 0) + total_water
+        pp_stats.append({
+            **pp,
+            "mw_each": base_mw * clock,
+            "mw_total": total_mw,
+            "fuel_per_min": total_fuel,
+            "water_per_min": total_water,
+        })
+
     return {
         "state": state,
         "result": result,
         "budget": budget,
         "available": available,
+        "pp_stats": pp_stats,
+        "pp_total_generation": pp_total_generation,
+        "pp_fuel_demand": pp_fuel_demand,
     }
 
 
@@ -261,6 +304,10 @@ def home(request: Request):
         "choices_data": choices_data,
         "machines_info": MACHINES,
         "factories": factories_list,
+        "generators": GENERATORS,
+        "pp_stats": data["pp_stats"],
+        "pp_total_generation": data["pp_total_generation"],
+        "pp_fuel_demand": data["pp_fuel_demand"],
         "hostname": HOSTNAME,
     })
 
@@ -403,6 +450,50 @@ def set_clock(plan_id: int = Form(...), product: str = Form(...), clock_pct: flo
     return RedirectResponse("/#chain", status_code=303)
 
 
+
+# ----- Power plant routes -----
+@app.post("/api/powerplants/add")
+def add_power_plant(plan_id: int = Form(...),
+                    generator_type: str = Form(...),
+                    fuel_type: str = Form(...),
+                    count: int = Form(1),
+                    clock_pct: float = Form(100),
+                    pp_name: str = Form("")):
+    gen = GENERATORS.get(generator_type)
+    if not gen or fuel_type not in gen["fuels"]:
+        return RedirectResponse("/", status_code=303)
+    clock_pct = max(1, min(250, clock_pct))
+    count = max(1, count)
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO power_plants (plan_id, name, generator_type, fuel_type, count, clock_pct) VALUES (?,?,?,?,?,?)",
+            (plan_id, pp_name.strip(), generator_type, fuel_type, count, clock_pct)
+        )
+    return RedirectResponse("/#power", status_code=303)
+
+
+@app.post("/api/powerplants/{pp_id}/update")
+def update_power_plant(pp_id: int,
+                       count: int = Form(None),
+                       clock_pct: float = Form(None),
+                       fuel_type: str = Form(None)):
+    with get_db() as conn:
+        if count is not None:
+            conn.execute("UPDATE power_plants SET count=? WHERE id=?", (max(1, count), pp_id))
+        if clock_pct is not None:
+            conn.execute("UPDATE power_plants SET clock_pct=? WHERE id=?", (max(1, min(250, clock_pct)), pp_id))
+        if fuel_type is not None:
+            conn.execute("UPDATE power_plants SET fuel_type=? WHERE id=?", (fuel_type, pp_id))
+    return RedirectResponse("/#power", status_code=303)
+
+
+@app.post("/api/powerplants/{pp_id}/delete")
+def delete_power_plant(pp_id: int):
+    with get_db() as conn:
+        conn.execute("DELETE FROM power_plants WHERE id=?", (pp_id,))
+    return RedirectResponse("/#power", status_code=303)
+
+
 # ----- Factory helpers -----
 def load_factories_summary(conn) -> list:
     """Load all factories with their target summaries."""
@@ -419,6 +510,7 @@ def load_factories_summary(conn) -> list:
             "SELECT COUNT(*) c FROM factory_choices WHERE factory_id=?",
             (f["id"],)
         ).fetchone()["c"]
+        # Load power plants for this factory's plan (via plan_id reference)
         result.append({
             "id": f["id"],
             "name": f["name"],
@@ -552,6 +644,78 @@ def world_view(request: Request):
         "merged_targets": merged_targets,
         "total_power": result["total_power"],
         "machines_info": MACHINES,
+        "hostname": HOSTNAME,
+    })
+
+
+
+@app.get("/power", response_class=HTMLResponse)
+def power_budget(request: Request):
+    """Power budget: all factories consumption vs all power plants generation."""
+    with get_db() as conn:
+        plan_id = get_active_plan_id(conn)
+        factories_list = load_factories_summary(conn)
+
+        # Get power plants from active plan
+        pplants = conn.execute(
+            "SELECT * FROM power_plants WHERE plan_id=? ORDER BY id", (plan_id,)
+        ).fetchall()
+
+    # Compute factory power consumption per factory
+    factory_power = []
+    total_consumption = 0
+    for f in factories_list:
+        # Solve each factory individually to get its power consumption
+        ftargets = {t["product"]: t["rate_per_min"] for t in f["targets"]}
+        # Load factory choices
+        with get_db() as conn:
+            fchoices_rows = conn.execute(
+                "SELECT product, recipe FROM factory_choices WHERE factory_id=?",
+                (f["id"],)
+            ).fetchall()
+        fchoices = {c["product"]: c["recipe"] for c in fchoices_rows}
+        fresult = solve(ftargets, fchoices, db, MACHINE_POWER)
+        factory_power.append({
+            "name": f["name"],
+            "power_mw": fresult["total_power"],
+            "targets": f["targets"],
+        })
+        total_consumption += fresult["total_power"]
+
+    # Compute power plant generation
+    pp_stats = []
+    total_generation = 0
+    pp_fuel_demand = {}
+    for pp in pplants:
+        pp = dict(pp)
+        gen = GENERATORS.get(pp["generator_type"], {})
+        base_mw = gen.get("power_mw", 0)
+        fuel_rate = gen.get("fuels", {}).get(pp["fuel_type"], 0)
+        water_rate = gen.get("water_per_min", 0)
+        clock = pp["clock_pct"] / 100.0
+        total_mw = base_mw * pp["count"] * clock
+        total_fuel = fuel_rate * pp["count"] * clock
+        total_water = water_rate * pp["count"] * clock
+        total_generation += total_mw
+        pp_fuel_demand[pp["fuel_type"]] = pp_fuel_demand.get(pp["fuel_type"], 0) + total_fuel
+        if total_water > 0:
+            pp_fuel_demand["Water"] = pp_fuel_demand.get("Water", 0) + total_water
+        pp_stats.append({
+            **pp,
+            "mw_each": base_mw * clock,
+            "mw_total": total_mw,
+            "fuel_per_min": total_fuel,
+        })
+
+    return templates.TemplateResponse("power.html", {
+        "request": request,
+        "factory_power": factory_power,
+        "total_consumption": total_consumption,
+        "pp_stats": pp_stats,
+        "total_generation": total_generation,
+        "net_power": total_generation - total_consumption,
+        "pp_fuel_demand": pp_fuel_demand,
+        "generators": GENERATORS,
         "hostname": HOSTNAME,
     })
 
