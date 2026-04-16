@@ -393,6 +393,10 @@
     font-weight: 700;
   }
 
+  table.chain input[type=number] { -moz-appearance: textfield; }
+  table.chain input[type=number]::-webkit-outer-spin-button,
+  table.chain input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
   /* Recipe choices */
   .choices-list {
     max-height: 600px;
@@ -734,7 +738,18 @@
                 <td class="recipe-cell">{{ p.recipe or '—' }}</td>
                 <td>{{ p.machine or '—' }}</td>
                 <td class="machine-cell center">{{ p.machines_ceil if p.machines_ceil else '—' }}</td>
-                <td class="right">{{ "{:.1f}%".format(p.clock_pct) if p.clock_pct else '—' }}</td>
+                <td class="right">
+                  {% if p.clock_pct is not none and not p.is_raw %}
+                  <form method="post" action="/api/clock/set" style="display:inline">
+                    <input type="hidden" name="plan_id" value="{{ plan_id }}">
+                    <input type="hidden" name="product" value="{{ p.name }}">
+                    <input type="number" name="clock_pct" value="{{ "{:.0f}".format(p.target_clock) }}"
+                           min="1" max="250" step="1"
+                           style="width:52px; padding:2px 4px; font-size:11px; text-align:right; -moz-appearance:textfield;"
+                           onchange="this.form.submit()">
+                  </form>
+                  {% else %}—{% endif %}
+                </td>
                 <td class="right">{{ "{:,.1f}".format(p.power_total) if p.power_total else '—' }}</td>
                 <td class="center">
                   {% if not p.is_raw %}

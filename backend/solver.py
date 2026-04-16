@@ -117,7 +117,8 @@ class RecipeDB:
 def solve(targets: Dict[str, float],
           choices: Dict[str, str],
           db: RecipeDB,
-          machine_power: Dict[str, float]) -> dict:
+          machine_power: Dict[str, float],
+          clock_overrides: Dict[str, float] = None) -> dict:
     """
     Walk the production graph. Returns:
       {
@@ -128,6 +129,9 @@ def solve(targets: Dict[str, float],
         "warnings": [str, ...],
       }
     """
+    if clock_overrides is None:
+        clock_overrides = {}
+
     needed = defaultdict(float)
     for prod, rate in targets.items():
         if rate and prod:
@@ -235,7 +239,7 @@ def solve(targets: Dict[str, float],
             products_out_raws.append({
                 "name": p, "total_per_min": rate, "recipe": None, "machine": None,
                 "out_per_min_at_100": None, "machines_ceil": None,
-                "clock_pct": None, "power_total": 0, "ingredients": [],
+                "clock_pct": None, "target_clock": 100, "power_total": 0, "ingredients": [],
                 "is_raw": True, "is_target": p in targets,
             })
             continue
@@ -245,7 +249,7 @@ def solve(targets: Dict[str, float],
             products_out_intermediates.append({
                 "name": p, "total_per_min": rate, "recipe": None, "machine": None,
                 "out_per_min_at_100": None, "machines_ceil": None,
-                "clock_pct": None, "power_total": 0, "ingredients": [],
+                "clock_pct": None, "target_clock": 100, "power_total": 0, "ingredients": [],
                 "is_raw": False, "is_target": p in targets, "warning": True,
             })
             continue
@@ -253,10 +257,12 @@ def solve(targets: Dict[str, float],
         out_qty = next((q for o, q in rec["outputs"] if o == p), rec["outputs"][0][1])
         cycles_per_min = 60.0 / rec["duration"]
         out_per_min_100 = out_qty * cycles_per_min
-        scale = rate / out_per_min_100
-        machines_ceil = -(-rate // out_per_min_100) if out_per_min_100 > 0 else 0  # ceil
-        machines_ceil = int(machines_ceil)
-        per_machine_clock = (scale / machines_ceil * 100) if machines_ceil > 0 else 0
+        target_clock = clock_overrides.get(p, 100.0)
+        out_per_min_clocked = out_per_min_100 * (target_clock / 100.0)
+        scale = rate / out_per_min_100  # fractional machines at 100%
+        machines_ceil = -(-rate // out_per_min_clocked) if out_per_min_clocked > 0 else 0
+        machines_ceil = max(1, int(machines_ceil))
+        per_machine_clock = (rate / (machines_ceil * out_per_min_100)) * 100 if machines_ceil > 0 else 0
         power = machine_power.get(rec["machine"], 0) * scale
         total_power += power
         ingredients = []
@@ -272,6 +278,7 @@ def solve(targets: Dict[str, float],
             "out_per_min_at_100": out_per_min_100,
             "machines_ceil": machines_ceil,
             "clock_pct": per_machine_clock,
+            "target_clock": target_clock,
             "power_total": power,
             "ingredients": ingredients,
             "is_raw": False,

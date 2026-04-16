@@ -92,6 +92,14 @@ def init_db():
             rate_per_min REAL NOT NULL,
             FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS clock_overrides (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            plan_id INTEGER NOT NULL,
+            product TEXT NOT NULL,
+            clock_pct REAL NOT NULL DEFAULT 100,
+            UNIQUE(plan_id, product),
+            FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE
+        );
         CREATE TABLE IF NOT EXISTS factory_choices (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             factory_id INTEGER NOT NULL,
@@ -162,10 +170,15 @@ def load_plan_state(plan_id: int) -> dict:
             "SELECT resource, pure, normal, impure, miner_tier FROM resources WHERE plan_id=? ORDER BY id",
             (plan_id,)
         ).fetchall()
+        clocks = conn.execute(
+            "SELECT product, clock_pct FROM clock_overrides WHERE plan_id=?",
+            (plan_id,)
+        ).fetchall()
     return {
         "plan": dict(plan) if plan else None,
         "targets": [dict(t) for t in targets],
         "choices": {c["product"]: c["recipe"] for c in choices},
+        "clocks": {c["product"]: c["clock_pct"] for c in clocks},
         "resources": [dict(r) for r in resources],
     }
 
@@ -173,7 +186,7 @@ def load_plan_state(plan_id: int) -> dict:
 def compute_plan(plan_id: int) -> dict:
     state = load_plan_state(plan_id)
     targets = {t["product"]: t["rate_per_min"] for t in state["targets"]}
-    result = solve(targets, state["choices"], db, MACHINE_POWER)
+    result = solve(targets, state["choices"], db, MACHINE_POWER, state.get("clocks", {}))
 
     # Compute available raw resources
     available = {}
@@ -367,6 +380,29 @@ def export_plan():
 
 
 
+@app.post("/api/clock/set")
+def set_clock(plan_id: int = Form(...), product: str = Form(...), clock_pct: float = Form(...)):
+    """Set target clock speed for a product."""
+    clock_pct = max(1, min(250, clock_pct))  # clamp 1-250%
+    with get_db() as conn:
+        existing = conn.execute(
+            "SELECT id FROM clock_overrides WHERE plan_id=? AND product=?",
+            (plan_id, product)
+        ).fetchone()
+        if abs(clock_pct - 100.0) < 0.01:
+            # 100% is default, just delete the override
+            if existing:
+                conn.execute("DELETE FROM clock_overrides WHERE id=?", (existing["id"],))
+        elif existing:
+            conn.execute("UPDATE clock_overrides SET clock_pct=? WHERE id=?", (clock_pct, existing["id"]))
+        else:
+            conn.execute(
+                "INSERT INTO clock_overrides (plan_id, product, clock_pct) VALUES (?,?,?)",
+                (plan_id, product, clock_pct)
+            )
+    return RedirectResponse("/#chain", status_code=303)
+
+
 # ----- Factory helpers -----
 def load_factories_summary(conn) -> list:
     """Load all factories with their target summaries."""
@@ -468,6 +504,7 @@ def world_view(request: Request):
 
         merged_targets = {}
         merged_choices = {}
+        merged_clocks = {}
         for f in factories_list:
             ftargets = conn.execute(
                 "SELECT product, rate_per_min FROM factory_targets WHERE factory_id=?",
@@ -482,7 +519,8 @@ def world_view(request: Request):
             for c in fchoices:
                 merged_choices[c["product"]] = c["recipe"]
 
-        result = solve(merged_targets, merged_choices, db, MACHINE_POWER)
+
+        result = solve(merged_targets, merged_choices, db, MACHINE_POWER, merged_clocks)
 
         resources = conn.execute(
             "SELECT resource, pure, normal, impure, miner_tier FROM resources WHERE plan_id=? ORDER BY id",
