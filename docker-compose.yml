@@ -2,7 +2,7 @@ services:
   ficsit-planner:
     build: .
     container_name: ficsit-planner
-    restart: unless-stopped
+    restart: always
     ports:
       - "8042:8000"
     volumes:
@@ -11,6 +11,7 @@ services:
       - ./frontend:/app/frontend
     environment:
       - TZ=America/Denver
+      - PLANNER_HOST=docker02
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
       interval: 30s

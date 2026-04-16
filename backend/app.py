@@ -3,6 +3,8 @@ Satisfactory Master Planner - FastAPI backend
 """
 import json
 import sqlite3
+import os
+import socket
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
@@ -23,6 +25,7 @@ DATA_DIR.mkdir(exist_ok=True)
 DB_PATH = DATA_DIR / "planner.db"
 
 app = FastAPI(title="Satisfactory Master Planner")
+HOSTNAME = os.environ.get("PLANNER_HOST", socket.gethostname())
 templates = Jinja2Templates(directory=str(BASE_DIR.parent / "frontend"))
 
 db = RecipeDB(RECIPES)
@@ -243,6 +246,7 @@ def home(request: Request):
         "choices_data": choices_data,
         "machines_info": MACHINES,
         "factories": factories_list,
+        "hostname": HOSTNAME,
     })
 
 
@@ -508,6 +512,7 @@ def world_view(request: Request):
         "merged_targets": merged_targets,
         "total_power": result["total_power"],
         "machines_info": MACHINES,
+        "hostname": HOSTNAME,
     })
 
 
