@@ -142,6 +142,17 @@
       <div class="label">Chain Power Cost</div>
       <div class="value">{{ "{:,.0f}".format(result.total_power) }}<span class="unit">MW</span></div>
     </div>
+    {% if pp.waste %}
+    <div class="stat-card" style="border-color: var(--warn);">
+      <div class="label">Waste Output</div>
+      <div class="value" style="color: var(--warn);">
+        {% for w, r in pp.waste.items() %}{{ "{:,.1f}".format(r) }}{% endfor %}
+      </div>
+      <div class="unit" style="color:var(--text-dim); font-family:'JetBrains Mono',monospace; font-size:11px;">
+        {% for w, r in pp.waste.items() %}{{ w }}/min{% endfor %}
+      </div>
+    </div>
+    {% endif %}
     <div class="stat-card" style="border-color: var(--good);">
       <div class="label">Net Power</div>
       {% set net = pp.mw_total - result.total_power %}
@@ -212,7 +223,18 @@
               <td class="recipe-cell">{{ p.recipe or '—' }}</td>
               <td>{{ p.machine or '—' }}</td>
               <td class="machine-cell center">{{ p.machines_ceil if p.machines_ceil else '—' }}</td>
-              <td class="right">{{ "{:.1f}%".format(p.clock_pct) if p.clock_pct else '—' }}</td>
+              <td class="right">
+                {% if p.clock_pct is not none and not p.is_raw %}
+                <form method="post" action="/api/clock/set/pp/{{ pp.id }}" style="display:inline">
+                  <input type="hidden" name="plan_id" value="{{ plan_id }}">
+                  <input type="hidden" name="product" value="{{ p.name }}">
+                  <input type="number" name="clock_pct" value="{{ "{:.0f}".format(p.target_clock) }}"
+                         min="1" max="250" step="1"
+                         style="width:52px; padding:2px 4px; font-size:11px; text-align:right; -moz-appearance:textfield; background:var(--bg-deep); border:1px solid var(--border-bright); color:var(--text); border-radius:3px;"
+                         onchange="this.form.submit()">
+                </form>
+                {% else %}—{% endif %}
+              </td>
               <td class="right">{{ "{:,.1f}".format(p.power_total) if p.power_total else '—' }}</td>
             </tr>
           {% endfor %}

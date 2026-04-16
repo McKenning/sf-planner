@@ -184,6 +184,9 @@ print(f"Module loaded. Machines: {len(MACHINES)}, Resources: {len(RESOURCES)}, T
 
 # Power generators: type -> {power_mw, fuels: {fuel: consumption_per_min at 100%}}
 # All generators scale linearly with clock speed
+# Power generators: type -> {power_mw, fuels: {fuel: consumption_per_min}, water_per_min, waste: {fuel: {product: rate}}}
+# All rates are at 100% clock and scale linearly with clock speed.
+# Waste is per generator at 100%. Ficsonium produces no waste.
 GENERATORS = {
     "Coal Generator": {
         "power_mw": 75,
@@ -193,6 +196,7 @@ GENERATORS = {
             "Petroleum Coke": 25,
         },
         "water_per_min": 45,
+        "waste": {},
     },
     "Fuel Generator": {
         "power_mw": 250,
@@ -204,6 +208,7 @@ GENERATORS = {
             "Ionized Fuel": 3,
         },
         "water_per_min": 0,
+        "waste": {},
     },
     "Nuclear Power Plant": {
         "power_mw": 2500,
@@ -213,5 +218,9 @@ GENERATORS = {
             "Ficsonium Fuel Rod": 0.1,
         },
         "water_per_min": 240,
+        "waste": {
+            "Uranium Fuel Rod": {"Uranium Waste": 10},
+            "Plutonium Fuel Rod": {"Plutonium Waste": 1},
+        },
     },
 }

@@ -199,6 +199,35 @@
   </div>
   {% endif %}
 
+  <!-- Nuclear Waste Output -->
+  {% if pp_stats %}
+  {% set all_waste = {} %}
+  {% for pp in pp_stats %}
+    {% if pp.waste is defined %}
+      {% for w, r in pp.waste.items() %}
+        {% if all_waste.update({w: (all_waste.get(w, 0) + r)}) %}{% endif %}
+      {% endfor %}
+    {% endif %}
+  {% endfor %}
+  {% if all_waste %}
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Nuclear Waste Output</h2>
+    </div>
+    <div class="panel-body">
+      <div class="fuel-grid">
+        {% for waste, rate in all_waste.items() %}
+        <div class="fuel-cell" style="border-left-color: #fbbf24;">
+          <div class="name">{{ waste }}</div>
+          <div class="rate" style="color: #fbbf24;">{{ "{:,.1f}".format(rate) }} <span class="rate-unit">/min</span></div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  {% endif %}
+
   <!-- Factory Consumption -->
   {% if factory_power %}
   <div class="panel">

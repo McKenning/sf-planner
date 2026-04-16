@@ -248,25 +248,31 @@ def compute_plan(plan_id: int) -> dict:
     pp_stats = []
     pp_total_generation = 0
     pp_fuel_demand = {}  # fuel -> total per min needed
+    pp_waste_output = {}  # waste product -> total per min produced
     for pp in state.get("power_plants", []):
         gen = GENERATORS.get(pp["generator_type"], {})
         base_mw = gen.get("power_mw", 0)
         fuel_rate = gen.get("fuels", {}).get(pp["fuel_type"], 0)
         water_rate = gen.get("water_per_min", 0)
+        waste_rates = gen.get("waste", {}).get(pp["fuel_type"], {})
         clock = pp["clock_pct"] / 100.0
         total_mw = base_mw * pp["count"] * clock
         total_fuel = fuel_rate * pp["count"] * clock
         total_water = water_rate * pp["count"] * clock
+        waste_totals = {w: r * pp["count"] * clock for w, r in waste_rates.items()}
         pp_total_generation += total_mw
         pp_fuel_demand[pp["fuel_type"]] = pp_fuel_demand.get(pp["fuel_type"], 0) + total_fuel
         if total_water > 0:
             pp_fuel_demand["Water"] = pp_fuel_demand.get("Water", 0) + total_water
+        for w, r in waste_totals.items():
+            pp_waste_output[w] = pp_waste_output.get(w, 0) + r
         pp_stats.append({
             **pp,
             "mw_each": base_mw * clock,
             "mw_total": total_mw,
             "fuel_per_min": total_fuel,
             "water_per_min": total_water,
+            "waste": waste_totals,
         })
 
     # Also compute budget for combined chain
@@ -291,6 +297,7 @@ def compute_plan(plan_id: int) -> dict:
         "pp_stats": pp_stats,
         "pp_total_generation": pp_total_generation,
         "pp_fuel_demand": pp_fuel_demand,
+        "pp_waste_output": pp_waste_output,
     }
 
 
@@ -340,6 +347,7 @@ def home(request: Request):
         "pp_stats": data["pp_stats"],
         "pp_total_generation": data["pp_total_generation"],
         "pp_fuel_demand": data["pp_fuel_demand"],
+        "pp_waste_output": data["pp_waste_output"],
         "combined_result": data["combined_result"],
         "combined_budget": data["combined_budget"],
         "hostname": HOSTNAME,
@@ -651,16 +659,20 @@ def world_view(request: Request):
             "SELECT * FROM power_plants WHERE plan_id=? ORDER BY id", (plan_id,)
         ).fetchall()
         pp_total_gen = 0
+        world_waste = {}
         for pp in pplants:
             gen = GENERATORS.get(pp["generator_type"], {})
             fuel_rate = gen.get("fuels", {}).get(pp["fuel_type"], 0)
             water_rate = gen.get("water_per_min", 0)
+            waste_rates = gen.get("waste", {}).get(pp["fuel_type"], {})
             clock = pp["clock_pct"] / 100.0
             total_fuel = fuel_rate * pp["count"] * clock
             total_water = water_rate * pp["count"] * clock
             merged_targets[pp["fuel_type"]] = merged_targets.get(pp["fuel_type"], 0) + total_fuel
             if total_water > 0:
                 merged_targets["Water"] = merged_targets.get("Water", 0) + total_water
+            for w, r in waste_rates.items():
+                world_waste[w] = world_waste.get(w, 0) + r * pp["count"] * clock
             pp_total_gen += gen.get("power_mw", 0) * pp["count"] * clock
 
         result = solve(merged_targets, merged_choices, db, MACHINE_POWER, merged_clocks)
@@ -695,11 +707,35 @@ def world_view(request: Request):
         "merged_targets": merged_targets,
         "total_power": result["total_power"],
         "pp_total_generation": pp_total_gen,
+        "world_waste": world_waste,
         "machines_info": MACHINES,
         "hostname": HOSTNAME,
     })
 
 
+
+
+
+@app.post("/api/clock/set/pp/{pp_id}")
+def set_clock_for_pp(pp_id: int, plan_id: int = Form(...), product: str = Form(...), clock_pct: float = Form(...)):
+    """Set clock override and redirect back to power plant detail."""
+    clock_pct = max(1, min(250, clock_pct))
+    with get_db() as conn:
+        existing = conn.execute(
+            "SELECT id FROM clock_overrides WHERE plan_id=? AND product=?",
+            (plan_id, product)
+        ).fetchone()
+        if abs(clock_pct - 100.0) < 0.01:
+            if existing:
+                conn.execute("DELETE FROM clock_overrides WHERE id=?", (existing["id"],))
+        elif existing:
+            conn.execute("UPDATE clock_overrides SET clock_pct=? WHERE id=?", (clock_pct, existing["id"]))
+        else:
+            conn.execute(
+                "INSERT INTO clock_overrides (plan_id, product, clock_pct) VALUES (?,?,?)",
+                (plan_id, product, clock_pct)
+            )
+    return RedirectResponse(f"/powerplant/{pp_id}#chain", status_code=303)
 
 
 @app.get("/powerplant/{pp_id}", response_class=HTMLResponse)
@@ -737,6 +773,10 @@ def powerplant_detail(request: Request, pp_id: int):
     total_mw = base_mw * pp["count"] * clock
     total_fuel = fuel_rate * pp["count"] * clock
     total_water = water_rate * pp["count"] * clock
+
+    # Compute waste output
+    waste_rates = gen.get("waste", {}).get(pp["fuel_type"], {})
+    waste_totals = {w: r * pp["count"] * clock for w, r in waste_rates.items()}
 
     # Build targets from fuel demand
     targets = {pp["fuel_type"]: total_fuel}
@@ -785,6 +825,7 @@ def powerplant_detail(request: Request, pp_id: int):
         "mw_total": total_mw,
         "fuel_per_min": total_fuel,
         "water_per_min": total_water,
+        "waste": waste_totals,
     }
 
     return templates.TemplateResponse("powerplant_detail.html", {

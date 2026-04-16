@@ -217,6 +217,26 @@
     </div>
   </div>
 
+  <!-- Waste output -->
+  {% if world_waste is defined and world_waste %}
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Nuclear Waste Output</h2>
+      <span class="meta" style="color: #fbbf24;">World total</span>
+    </div>
+    <div class="panel-body">
+      <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+        {% for waste, rate in world_waste.items() %}
+        <div style="background:var(--bg-deep); border:1px solid var(--border); border-left:3px solid #fbbf24; border-radius:3px; padding:8px 12px;">
+          <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px;">{{ waste }}</div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:18px; font-weight:700; color:#fbbf24;">{{ "{:,.1f}".format(rate) }} <span style="font-size:11px; color:var(--text-faint);">/min</span></div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Budget -->
   <div class="panel">
     <div class="panel-header">

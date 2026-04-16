@@ -752,6 +752,14 @@
           {% endfor %}
         </div>
         {% endif %}
+        {% if pp_waste_output %}
+        <div style="margin: 8px 0; padding: 6px 8px; background: var(--bg-deep); border-radius: 3px; font-size: 11px; color: var(--text-dim); border-left: 2px solid var(--warn);">
+          <strong style="color: var(--warn);">Waste output:</strong>
+          {% for waste, rate in pp_waste_output.items() %}
+            {{ waste }} {{ "{:,.1f}".format(rate) }}/min{{ ", " if not loop.last }}
+          {% endfor %}
+        </div>
+        {% endif %}
 
         <form class="pp-add-form" method="post" action="/api/powerplants/add">
           <input type="hidden" name="plan_id" value="{{ plan_id }}">
