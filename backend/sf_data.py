@@ -215,7 +215,7 @@ GENERATORS = {
         "fuels": {
             "Uranium Fuel Rod": 0.2,
             "Plutonium Fuel Rod": 0.1,
-            "Ficsonium Fuel Rod": 0.1,
+            "Ficsonium Fuel Rod": 1.0,
         },
         "water_per_min": 240,
         "waste": {
