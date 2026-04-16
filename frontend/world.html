@@ -270,7 +270,10 @@
             <span class="demand">{{ "{:,.1f}".format(b.demand) if b.demand > 0 else '—' }}</span>
             <span class="avail">/ {{ '∞' if unlimited else "{:,.0f}".format(b.available) }}</span>
           </div>
-          <div class="util-bar"><div class="util-fill" style="width: {{ 0 if unlimited else (b.utilization|round(1) if b.utilization < 100 else 100) }}%"></div></div>
+          <div style="display:flex; align-items:center; gap:6px; margin-top:6px;">
+              <div class="util-bar" style="flex:1; margin-top:0;"><div class="util-fill" style="width: {{ 0 if unlimited else (b.utilization|round(1) if b.utilization < 100 else 100) }}%"></div></div>
+              <span style="font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-dim); white-space:nowrap;">{% if b.demand > 0 and not unlimited %}{{ "{:.1f}%".format(b.utilization) }}{% endif %}</span>
+            </div>
         </div>
         {% endfor %}
       </div>
