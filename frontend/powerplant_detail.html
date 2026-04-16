@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FICSIT Planner — {{ pp.name or pp.generator_type }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-deep: #0a0e14; --bg: #11161e; --bg-elev: #1a212c; --bg-elev2: #232c3a;
+    --border: #2c3645; --border-bright: #3d4a5e;
+    --text: #d6dde8; --text-dim: #8a96aa; --text-faint: #5a6478;
+    --accent: #ff7e1c; --accent-glow: rgba(255, 126, 28, 0.15);
+    --good: #4ade80; --warn: #fbbf24; --bad: #ef4444;
+    --bad-bg: rgba(239, 68, 68, 0.1); --good-bg: rgba(74, 222, 128, 0.1);
+    --warn-bg: rgba(251, 191, 36, 0.1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--bg-deep); color: var(--text);
+    font-family: 'Inter', system-ui, sans-serif; font-size: 14px; line-height: 1.5; min-height: 100vh;
+  }
+  body {
+    background-image:
+      radial-gradient(circle at 30% 0%, rgba(74, 222, 128, 0.04) 0%, transparent 40%),
+      linear-gradient(180deg, var(--bg-deep) 0%, var(--bg) 100%);
+  }
+  header {
+    position: sticky; top: 0; z-index: 100; background: var(--bg-deep);
+    border-bottom: 1px solid var(--border); padding: 14px 24px;
+    display: flex; align-items: center; gap: 24px; backdrop-filter: blur(8px);
+  }
+  header h1 { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 2px; color: var(--accent); line-height: 1; }
+  header h1 .sub { color: var(--text-dim); font-size: 12px; letter-spacing: 4px; margin-left: 8px; }
+  nav { display: flex; gap: 4px; margin-left: auto; }
+  nav a { color: var(--text-dim); text-decoration: none; padding: 6px 14px; border-radius: 4px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; transition: all 0.15s; }
+  nav a:hover { color: var(--accent); background: var(--accent-glow); }
+  main { max-width: 1400px; margin: 0 auto; padding: 24px; }
+  .panel { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin-bottom: 16px; }
+  .panel-header { padding: 12px 16px; background: var(--bg-elev2); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .panel-header h2 { font-family: 'Bebas Neue', sans-serif; font-size: 16px; letter-spacing: 2px; color: var(--text); }
+  .panel-header .meta { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim); }
+  .panel-body { padding: 12px 16px; }
+
+  /* Summary card */
+  .pp-summary {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px; text-align: center;
+  }
+  .stat-card .label { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: var(--text-dim); margin-bottom: 4px; }
+  .stat-card .value { font-family: 'Bebas Neue', sans-serif; font-size: 36px; line-height: 1; letter-spacing: 1px; }
+  .stat-card .unit { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-dim); }
+  .stat-card.power { border-color: var(--good); }
+  .stat-card.power .value { color: var(--good); }
+  .stat-card.fuel { border-color: var(--warn); }
+  .stat-card.fuel .value { color: var(--warn); }
+  .stat-card.consumption { border-color: var(--accent); }
+  .stat-card.consumption .value { color: var(--accent); }
+
+  /* Budget grid */
+  .budget-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+  .budget-cell { background: var(--bg-deep); border: 1px solid var(--border); border-left: 3px solid var(--text-faint); border-radius: 3px; padding: 8px 10px; }
+  .budget-cell.ok { border-left-color: var(--good); }
+  .budget-cell.warn { border-left-color: var(--warn); background: var(--warn-bg); }
+  .budget-cell.bad { border-left-color: var(--bad); background: var(--bad-bg); }
+  .budget-cell .name { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
+  .budget-cell .stats { display: flex; justify-content: space-between; align-items: baseline; font-family: 'JetBrains Mono', monospace; }
+  .budget-cell .demand { font-size: 16px; font-weight: 700; color: var(--text); }
+  .budget-cell .avail { font-size: 11px; color: var(--text-faint); }
+  .budget-cell .util-bar { height: 3px; background: var(--bg-elev2); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+  .budget-cell .util-fill { height: 100%; background: var(--good); transition: width 0.3s; }
+  .budget-cell.warn .util-fill { background: var(--warn); }
+  .budget-cell.bad .util-fill { background: var(--bad); }
+
+  /* Chain table */
+  table.chain { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.chain thead { position: sticky; top: 0; background: var(--bg-elev2); z-index: 10; }
+  table.chain th { text-align: left; padding: 8px 12px; font-size: 10px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1.5px; border-bottom: 1px solid var(--border-bright); }
+  table.chain th.right, table.chain td.right { text-align: right; }
+  table.chain th.center, table.chain td.center { text-align: center; }
+  table.chain td { padding: 8px 12px; border-bottom: 1px solid var(--border); font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  table.chain td.product { font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; }
+  table.chain tr:hover td { background: rgba(255, 126, 28, 0.04); }
+  table.chain tr.target td { background: rgba(74, 222, 128, 0.08); }
+  table.chain tr.target td.product { color: var(--good); }
+  table.chain tr.raw td { background: var(--bg-deep); }
+  table.chain tr.raw td.product { color: var(--text-dim); font-style: italic; }
+  table.chain td.machine-cell { font-family: 'JetBrains Mono', monospace; color: var(--accent); font-weight: 700; font-size: 14px; }
+  table.chain td.recipe-cell { font-family: 'Inter', sans-serif; font-size: 12px; color: var(--text-dim); }
+  .alt-badge, .raw-badge { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 2px; text-transform: uppercase; letter-spacing: 1px; margin-left: 6px; }
+  .alt-badge { background: var(--accent-glow); color: var(--accent); }
+  .fuel-badge { background: rgba(74,222,128,0.15); color: var(--good); display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 2px; text-transform: uppercase; letter-spacing: 1px; margin-left: 6px; }
+  .raw-badge { background: var(--bg-elev2); color: var(--text-dim); display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 2px; text-transform: uppercase; letter-spacing: 1px; margin-left: 6px; }
+  .section-row td { background: var(--bg-elev2) !important; color: var(--accent); font-family: 'Bebas Neue', sans-serif; font-size: 14px; letter-spacing: 3px; padding: 10px 12px !important; text-align: center; border-top: 2px solid var(--accent); border-bottom: 2px solid var(--accent); }
+
+  /* Recipe choices */
+  details > summary { cursor: pointer; padding: 6px 0; font-weight: 600; color: var(--text-dim); list-style: none; user-select: none; }
+  details > summary::before { content: '▶'; display: inline-block; margin-right: 8px; transition: transform 0.15s; color: var(--accent); font-size: 10px; }
+  details[open] > summary::before { transform: rotate(90deg); }
+  .choices-list { max-height: 600px; overflow-y: auto; }
+  .choice-row { display: grid; grid-template-columns: 1fr 1.5fr auto; gap: 8px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+  .choice-row .product-name { font-weight: 600; font-size: 13px; }
+  .choice-row select { padding: 3px 6px; font-size: 12px; background: var(--bg-deep); border: 1px solid var(--border-bright); color: var(--text); border-radius: 3px; }
+
+  .footer-meta { text-align: center; padding: 24px; font-size: 11px; color: var(--text-faint); font-family: 'JetBrains Mono', monospace; }
+  .footer-meta .accent { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>FICSIT PLANNER <span class="sub">// {{ (pp.name or pp.generator_type)|upper }}</span></h1>
+  <nav>
+    <a href="/">Planner</a>
+    <a href="/world">World</a>
+    <a href="/power">Power</a>
+  </nav>
+</header>
+
+<main>
+
+  <!-- Summary stats -->
+  <div class="pp-summary">
+    <div class="stat-card power">
+      <div class="label">Power Output</div>
+      <div class="value">{{ "{:,.0f}".format(pp.mw_total) }}<span class="unit">MW</span></div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Generators</div>
+      <div class="value">{{ pp.count }}<span class="unit">× {{ pp.clock_pct|int }}%</span></div>
+    </div>
+    <div class="stat-card fuel">
+      <div class="label">{{ pp.fuel_type }}</div>
+      <div class="value">{{ "{:,.1f}".format(pp.fuel_per_min) }}<span class="unit">/min</span></div>
+    </div>
+    <div class="stat-card consumption">
+      <div class="label">Chain Power Cost</div>
+      <div class="value">{{ "{:,.0f}".format(result.total_power) }}<span class="unit">MW</span></div>
+    </div>
+    <div class="stat-card" style="border-color: var(--good);">
+      <div class="label">Net Power</div>
+      {% set net = pp.mw_total - result.total_power %}
+      <div class="value" style="color: {{ 'var(--good)' if net >= 0 else 'var(--bad)' }};">{{ "{:+,.0f}".format(net) }}<span class="unit">MW</span></div>
+    </div>
+  </div>
+
+  <!-- Resource Budget -->
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Resource Budget</h2>
+      <span class="meta">{{ budget|selectattr('ok', 'eq', false)|list|length }} shortfalls</span>
+    </div>
+    <div class="panel-body">
+      <div class="budget-grid">
+        {% for b in budget %}
+        {% set unlimited = b.available >= 999999 %}
+        {% set cls = 'ok' if unlimited or b.utilization < 75 else ('warn' if b.utilization <= 100 else 'bad') %}
+        <div class="budget-cell {{ cls }}">
+          <div class="name">{{ b.resource }}</div>
+          <div class="stats">
+            <span class="demand">{{ "{:,.1f}".format(b.demand) if b.demand > 0 else '—' }}</span>
+            <span class="avail">/ {{ '∞' if unlimited else "{:,.0f}".format(b.available) }}</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:6px; margin-top:6px;">
+            <div class="util-bar" style="flex:1; margin-top:0;"><div class="util-fill" style="width: {{ 0 if unlimited else (b.utilization|round(1) if b.utilization < 100 else 100) }}%"></div></div>
+            <span style="font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-dim); white-space:nowrap;">{% if b.demand > 0 and not unlimited %}{{ "{:.1f}%".format(b.utilization) }}{% endif %}</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Production Chain -->
+  <div class="panel" id="chain">
+    <div class="panel-header">
+      <h2>Fuel Production Chain</h2>
+      <span class="meta">{{ result.products|length }} products</span>
+    </div>
+    <div class="panel-body" style="padding: 0;">
+      <table class="chain">
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th class="right">/min needed</th>
+            <th>Recipe</th>
+            <th>Building</th>
+            <th class="center">Machines</th>
+            <th class="right">Clock</th>
+            <th class="right">Power</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set ns = namespace(in_raws=false) %}
+          {% for p in result.products %}
+            {% if p.is_raw and not ns.in_raws %}
+              {% set ns.in_raws = true %}
+              <tr class="section-row"><td colspan="7">// RAW RESOURCES //</td></tr>
+            {% endif %}
+            <tr class="{{ 'target' if p.is_target else ('raw' if p.is_raw else '') }}">
+              <td class="product">
+                {{ p.name }}
+                {% if p.is_target %}<span class="fuel-badge">FUEL</span>{% endif %}
+                {% if p.is_raw %}<span class="raw-badge">RAW</span>{% endif %}
+              </td>
+              <td class="right">{{ "{:,.2f}".format(p.total_per_min) }}</td>
+              <td class="recipe-cell">{{ p.recipe or '—' }}</td>
+              <td>{{ p.machine or '—' }}</td>
+              <td class="machine-cell center">{{ p.machines_ceil if p.machines_ceil else '—' }}</td>
+              <td class="right">{{ "{:.1f}%".format(p.clock_pct) if p.clock_pct else '—' }}</td>
+              <td class="right">{{ "{:,.1f}".format(p.power_total) if p.power_total else '—' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Recipe Choices -->
+  <div class="panel" id="choices" style="margin-top: 16px;">
+    <div class="panel-header">
+      <h2>Recipe Choices</h2>
+      <span class="meta">{{ choices_dict|length }} overrides</span>
+    </div>
+    <div class="panel-body">
+      <details>
+        <summary>Show all products with multiple recipe options ({{ choices_data|length }} total)</summary>
+        <div class="choices-list" style="margin-top: 12px;">
+          {% for product, info in choices_data.items() %}
+            <div class="choice-row">
+              <span class="product-name">{{ product }}</span>
+              <form method="post" action="/api/choices/set" style="display: contents">
+                <input type="hidden" name="plan_id" value="{{ plan_id }}">
+                <input type="hidden" name="product" value="{{ product }}">
+                <select name="recipe" onchange="this.form.submit()">
+                  {% set current = choices_dict.get(product) %}
+                  {% for opt in info.options %}
+                    <option value="{{ opt.recipe }}" {% if (current and current == opt.recipe) or (not current and opt.recipe == info.default) %}selected{% endif %}>
+                      {% if opt.tier %}[{{ opt.tier }}] {% endif %}{{ opt.recipe }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </form>
+              {% if choices_dict.get(product) %}
+              <form method="post" action="/api/choices/reset" style="display: inline">
+                <input type="hidden" name="plan_id" value="{{ plan_id }}">
+                <input type="hidden" name="product" value="{{ product }}">
+                <button type="submit" style="background:transparent; color:var(--text-dim); border:1px solid var(--border-bright); padding:2px 8px; font-size:10px; border-radius:3px; cursor:pointer;">Reset</button>
+              </form>
+              {% else %}
+              <span style="color: var(--text-faint); font-size: 10px;">default</span>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </details>
+    </div>
+  </div>
+
+</main>
+
+<div class="footer-meta">
+  FICSIT PLANNER · <span class="accent">v0.2</span> · running on {{ hostname }}
+</div>
+
+</body>
+</html>

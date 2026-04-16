@@ -737,6 +737,7 @@
                    onchange="this.form.submit()" title="Clock speed %">
           </form>
           <span class="pp-output" title="{{ "{:,.0f}".format(pp.mw_total) }} MW">{{ "{:,.0f}".format(pp.mw_total) }}</span>
+          <a href="/powerplant/{{ pp.id }}" style="color:var(--accent); font-size:10px; text-decoration:none; font-weight:600;" title="View production chain">View</a>
           <form method="post" action="/api/powerplants/{{ pp.id }}/delete" style="display:inline">
             <button type="submit" class="danger" title="Remove" style="padding:2px 6px;">×</button>
           </form>

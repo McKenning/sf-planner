@@ -701,6 +701,106 @@ def world_view(request: Request):
 
 
 
+
+@app.get("/powerplant/{pp_id}", response_class=HTMLResponse)
+def powerplant_detail(request: Request, pp_id: int):
+    """Show a single power plant with its full fuel production chain."""
+    with get_db() as conn:
+        plan_id = get_active_plan_id(conn)
+        pp = conn.execute("SELECT * FROM power_plants WHERE id=?", (pp_id,)).fetchone()
+        if not pp:
+            return RedirectResponse("/", status_code=303)
+        pp = dict(pp)
+
+        # Load plan choices and clocks for recipe/clock overrides
+        choices = conn.execute(
+            "SELECT product, recipe FROM recipe_choices WHERE plan_id=?", (plan_id,)
+        ).fetchall()
+        choices_dict = {c["product"]: c["recipe"] for c in choices}
+        clocks = conn.execute(
+            "SELECT product, clock_pct FROM clock_overrides WHERE plan_id=?", (plan_id,)
+        ).fetchall()
+        clocks_dict = {c["product"]: c["clock_pct"] for c in clocks}
+
+        # Load resources for budget
+        resources = conn.execute(
+            "SELECT resource, pure, normal, impure, miner_tier FROM resources WHERE plan_id=? ORDER BY id",
+            (plan_id,)
+        ).fetchall()
+
+    # Compute fuel demand for this power plant
+    gen = GENERATORS.get(pp["generator_type"], {})
+    base_mw = gen.get("power_mw", 0)
+    fuel_rate = gen.get("fuels", {}).get(pp["fuel_type"], 0)
+    water_rate = gen.get("water_per_min", 0)
+    clock = pp["clock_pct"] / 100.0
+    total_mw = base_mw * pp["count"] * clock
+    total_fuel = fuel_rate * pp["count"] * clock
+    total_water = water_rate * pp["count"] * clock
+
+    # Build targets from fuel demand
+    targets = {pp["fuel_type"]: total_fuel}
+    if total_water > 0:
+        targets["Water"] = total_water
+
+    # Solve the production chain
+    result = solve(targets, choices_dict, db, MACHINE_POWER, clocks_dict)
+
+    # Compute resource budget
+    available = {}
+    for r in resources:
+        available[r["resource"]] = calculate_available(
+            r["resource"], r["pure"], r["normal"], r["impure"], r["miner_tier"]
+        )
+    budget = []
+    for raw in BUDGET_RAWS:
+        demand = result["raws"].get(raw, 0)
+        avail = available.get(raw, 0)
+        surplus = avail - demand
+        util = (demand / avail * 100) if avail > 0 else 0
+        budget.append({
+            "resource": raw, "demand": demand, "available": avail,
+            "surplus": surplus, "utilization": util, "ok": surplus >= 0,
+        })
+
+    # Build choices_data for recipe overrides display
+    choices_data = {}
+    for product in sorted(db.producers.keys()):
+        if product in TREAT_AS_RAW:
+            continue
+        opts = db.all_choices_for(product)
+        if len(opts) < 2:
+            continue
+        default = db.default_recipe(product)
+        choices_data[product] = {
+            "default": default,
+            "options": [
+                {"recipe": rn, "tier": ALT_TIERS.get(rn, ""), "is_alternate": rn.startswith("Alternate:")}
+                for rn in opts
+            ],
+        }
+
+    pp_info = {
+        **pp,
+        "mw_total": total_mw,
+        "fuel_per_min": total_fuel,
+        "water_per_min": total_water,
+    }
+
+    return templates.TemplateResponse("powerplant_detail.html", {
+        "request": request,
+        "plan_id": plan_id,
+        "pp": pp_info,
+        "result": result,
+        "budget": budget,
+        "choices_data": choices_data,
+        "choices_dict": choices_dict,
+        "machines_info": MACHINES,
+        "generators": GENERATORS,
+        "hostname": HOSTNAME,
+    })
+
+
 @app.get("/power", response_class=HTMLResponse)
 def power_budget(request: Request):
     """Power budget: all factories consumption vs all power plants generation."""

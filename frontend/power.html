@@ -166,7 +166,7 @@
         <tbody>
           {% for pp in pp_stats %}
           <tr>
-            <td><strong>{{ pp.generator_type }}</strong></td>
+            <td><strong><a href="/powerplant/{{ pp.id }}" style="color:var(--text); text-decoration:none;">{{ pp.generator_type }}</a></strong></td>
             <td class="mono">{{ pp.fuel_type }}</td>
             <td class="right mono">{{ pp.count }}</td>
             <td class="right mono">{{ pp.clock_pct|int }}%</td>
