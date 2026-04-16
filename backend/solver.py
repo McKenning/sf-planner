@@ -34,7 +34,7 @@ BUDGET_RAWS = ["Iron Ore", "Copper Ore", "Limestone", "Coal", "Caterium Ore",
                "Crude Oil", "Water", "Nitrogen Gas"]
 
 
-def is_planner_recipe(name: str) -> bool:
+def is_planner_recipe(name: str, outputs=None) -> bool:
     """Filter out recipes that are noise for production planning."""
     if name.startswith("Unpackage"):
         return False
@@ -42,8 +42,14 @@ def is_planner_recipe(name: str) -> bool:
         return False
     if name.startswith("Residual "):
         return False
-    # Resource conversion recipes have parens, skip unless biomass
+    # Resource-to-resource Converter recipes (e.g. "Coal (Iron)") are noise,
+    # but Ficsite Ingot Converter recipes are real manufacturing recipes.
+    # Filter: skip parenthesized recipes ONLY if the primary output is a raw resource.
     if "(" in name and ")" in name and "Biomass" not in name:
+        if outputs:
+            primary_output = outputs[0][0] if outputs else ""
+            if primary_output not in TREAT_AS_RAW:
+                return True  # Keep it — it's a real product (e.g. Ficsite Ingot)
         return False
     return True
 
@@ -60,7 +66,7 @@ class RecipeDB:
         self.out_qty_for: Dict[Tuple[str, str], float] = {}
 
         for name, inputs, outputs, machines, duration in raw_recipes:
-            if not is_planner_recipe(name):
+            if not is_planner_recipe(name, outputs=list(outputs)):
                 continue
             primary = next((m for m in machines
                             if m not in ("Crafting Bench", "Equipment Workshop")),
