@@ -203,6 +203,24 @@ def compute_plan(plan_id: int) -> dict:
     targets = {t["product"]: t["rate_per_min"] for t in state["targets"]}
     result = solve(targets, state["choices"], db, MACHINE_POWER, state.get("clocks", {}))
 
+    # Also compute a combined result that includes power plant fuel demand
+    pp_fuel_targets = {}
+    for pp in state.get("power_plants", []):
+        gen = GENERATORS.get(pp["generator_type"], {})
+        fuel_rate = gen.get("fuels", {}).get(pp["fuel_type"], 0)
+        water_rate = gen.get("water_per_min", 0)
+        clock = pp["clock_pct"] / 100.0
+        total_fuel = fuel_rate * pp["count"] * clock
+        total_water = water_rate * pp["count"] * clock
+        pp_fuel_targets[pp["fuel_type"]] = pp_fuel_targets.get(pp["fuel_type"], 0) + total_fuel
+        if total_water > 0:
+            pp_fuel_targets["Water"] = pp_fuel_targets.get("Water", 0) + total_water
+    # Merge factory targets + fuel targets for a combined solve
+    combined_targets = dict(targets)
+    for fuel, rate in pp_fuel_targets.items():
+        combined_targets[fuel] = combined_targets.get(fuel, 0) + rate
+    combined_result = solve(combined_targets, state["choices"], db, MACHINE_POWER, state.get("clocks", {}))
+
     # Compute available raw resources
     available = {}
     for r in state["resources"]:
@@ -251,10 +269,24 @@ def compute_plan(plan_id: int) -> dict:
             "water_per_min": total_water,
         })
 
+    # Also compute budget for combined chain
+    combined_budget = []
+    for raw in BUDGET_RAWS:
+        demand = combined_result["raws"].get(raw, 0)
+        avail = available.get(raw, 0)
+        surplus = avail - demand
+        util = (demand / avail * 100) if avail > 0 else 0
+        combined_budget.append({
+            "resource": raw, "demand": demand, "available": avail,
+            "surplus": surplus, "utilization": util, "ok": surplus >= 0,
+        })
+
     return {
         "state": state,
         "result": result,
+        "combined_result": combined_result,
         "budget": budget,
+        "combined_budget": combined_budget,
         "available": available,
         "pp_stats": pp_stats,
         "pp_total_generation": pp_total_generation,
@@ -308,6 +340,8 @@ def home(request: Request):
         "pp_stats": data["pp_stats"],
         "pp_total_generation": data["pp_total_generation"],
         "pp_fuel_demand": data["pp_fuel_demand"],
+        "combined_result": data["combined_result"],
+        "combined_budget": data["combined_budget"],
         "hostname": HOSTNAME,
     })
 
@@ -612,6 +646,23 @@ def world_view(request: Request):
                 merged_choices[c["product"]] = c["recipe"]
 
 
+        # Also merge power plant fuel demand from active plan
+        pplants = conn.execute(
+            "SELECT * FROM power_plants WHERE plan_id=? ORDER BY id", (plan_id,)
+        ).fetchall()
+        pp_total_gen = 0
+        for pp in pplants:
+            gen = GENERATORS.get(pp["generator_type"], {})
+            fuel_rate = gen.get("fuels", {}).get(pp["fuel_type"], 0)
+            water_rate = gen.get("water_per_min", 0)
+            clock = pp["clock_pct"] / 100.0
+            total_fuel = fuel_rate * pp["count"] * clock
+            total_water = water_rate * pp["count"] * clock
+            merged_targets[pp["fuel_type"]] = merged_targets.get(pp["fuel_type"], 0) + total_fuel
+            if total_water > 0:
+                merged_targets["Water"] = merged_targets.get("Water", 0) + total_water
+            pp_total_gen += gen.get("power_mw", 0) * pp["count"] * clock
+
         result = solve(merged_targets, merged_choices, db, MACHINE_POWER, merged_clocks)
 
         resources = conn.execute(
@@ -643,6 +694,7 @@ def world_view(request: Request):
         "budget": budget,
         "merged_targets": merged_targets,
         "total_power": result["total_power"],
+        "pp_total_generation": pp_total_gen,
         "machines_info": MACHINES,
         "hostname": HOSTNAME,
     })

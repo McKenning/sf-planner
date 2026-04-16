@@ -546,7 +546,7 @@
   }
   .pp-add-form {
     display: grid;
-    grid-template-columns: 1fr 1fr 70px 60px auto;
+    grid-template-columns: 1fr 1fr;
     gap: 6px;
     margin-top: 10px;
     padding-top: 10px;
@@ -554,6 +554,9 @@
     align-items: center;
   }
   .pp-add-form select, .pp-add-form input { font-size: 12px; padding: 4px 6px; }
+  .pp-add-row2 { grid-column: 1 / -1; display: flex; gap: 6px; align-items: center; }
+  .pp-add-row2 input { width: 60px; }
+  .pp-add-row2 button { white-space: nowrap; }
   .pp-generation {
     font-family: 'JetBrains Mono', monospace;
     color: var(--good);
@@ -758,9 +761,13 @@
           </select>
           <select name="fuel_type" id="pp-fuel-select">
           </select>
-          <input type="number" name="count" value="1" min="1" step="1" placeholder="#" title="Count">
-          <input type="number" name="clock_pct" value="100" min="1" max="250" step="1" placeholder="%" title="Clock %">
-          <button type="submit">Add</button>
+          <div class="pp-add-row2">
+            <input type="number" name="count" value="1" min="1" step="1" placeholder="#" title="Count">
+            <span style="color:var(--text-dim);font-size:11px;">×</span>
+            <input type="number" name="clock_pct" value="100" min="1" max="250" step="1" placeholder="%" title="Clock %">
+            <span style="color:var(--text-dim);font-size:11px;">%</span>
+            <button type="submit" style="margin-left:auto;">Add</button>
+          </div>
         </form>
       </div>
     </div>
@@ -793,7 +800,7 @@
         <span class="meta">{{ budget|selectattr('ok', 'eq', false)|list|length }} shortfalls</span>
       </div>
       <div class="panel-body">
-        <div class="budget-grid">
+        <div class="budget-grid" id="budget-factory">
           {% for b in budget %}
           {% set unlimited = b.available >= 999999 %}
           {% set cls = 'ok' if unlimited or b.utilization < 75 else ('warn' if b.utilization <= 100 else 'bad') %}
@@ -811,13 +818,40 @@
           {% endfor %}
         </div>
       </div>
+      {% if pp_stats %}
+      <div class="budget-grid" id="budget-combined" style="display:none;">
+        {% for b in combined_budget %}
+        {% set unlimited = b.available >= 999999 %}
+        {% set cls = 'ok' if unlimited or b.utilization < 75 else ('warn' if b.utilization <= 100 else 'bad') %}
+        <div class="budget-cell {{ cls }}">
+          <div class="name">{{ b.resource }}</div>
+          <div class="stats">
+            <span class="demand">{{ "{:,.1f}".format(b.demand) if b.demand > 0 else '—' }}</span>
+            <span class="avail">/ {{ '∞' if unlimited else "{:,.0f}".format(b.available) }}</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:6px; margin-top:6px;">
+            <div class="util-bar" style="flex:1; margin-top:0;"><div class="util-fill" style="width: {{ 0 if unlimited else (b.utilization|round(1) if b.utilization < 100 else 100) }}%"></div></div>
+            <span style="font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-dim); white-space:nowrap;">{% if b.demand > 0 and not unlimited %}{{ "{:.1f}%".format(b.utilization) }}{% endif %}</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
     </div>
 
     <!-- Production chain -->
     <div class="panel" id="chain">
       <div class="panel-header">
         <h2>Production Chain</h2>
-        <span class="meta">{{ result.products|length }} products</span>
+        <div style="display:flex; align-items:center; gap:10px;">
+          {% if pp_stats %}
+          <label style="font-size:11px; color:var(--text-dim); display:flex; align-items:center; gap:4px; cursor:pointer;">
+            <input type="checkbox" id="show-combined" onchange="toggleCombined()" style="accent-color:var(--accent);">
+            Include fuel chains
+          </label>
+          {% endif %}
+          <span class="meta" id="chain-count">{{ result.products|length }} products</span>
+        </div>
       </div>
       <div class="panel-body" style="padding: 0;">
         <table class="chain">
@@ -873,6 +907,47 @@
           </tbody>
         </table>
       </div>
+      <!-- Combined chain (factory + power plant fuel) - hidden by default -->
+      {% if pp_stats %}
+      <div id="combined-chain" style="display:none; padding:0;">
+        <table class="chain">
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th class="right">/min needed</th>
+              <th>Recipe</th>
+              <th>Building</th>
+              <th class="center">Machines</th>
+              <th class="right">Clock</th>
+              <th class="right">Power</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% set ns2 = namespace(in_raws=false) %}
+            {% for p in combined_result.products %}
+              {% if p.is_raw and not ns2.in_raws %}
+                {% set ns2.in_raws = true %}
+                <tr class="section-row"><td colspan="7">// RAW RESOURCES //</td></tr>
+              {% endif %}
+              <tr class="{{ 'target' if p.is_target else ('raw' if p.is_raw else '') }}">
+                <td class="product">
+                  {{ p.name }}
+                  {% if p.is_target %}<span class="alt-badge">TARGET</span>{% endif %}
+                  {% if p.name in pp_fuel_demand %}<span class="alt-badge" style="background:rgba(74,222,128,0.15);color:var(--good);">FUEL</span>{% endif %}
+                  {% if p.is_raw %}<span class="raw-badge">RAW</span>{% endif %}
+                </td>
+                <td class="right">{{ "{:,.2f}".format(p.total_per_min) }}</td>
+                <td class="recipe-cell">{{ p.recipe or '—' }}</td>
+                <td>{{ p.machine or '—' }}</td>
+                <td class="machine-cell center">{{ p.machines_ceil if p.machines_ceil else '—' }}</td>
+                <td class="right">{{ "{:.1f}%".format(p.clock_pct) if p.clock_pct else '—' }}</td>
+                <td class="right">{{ "{:,.1f}".format(p.power_total) if p.power_total else '—' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
     </div>
 
     <!-- Recipe choices -->
@@ -950,6 +1025,39 @@
   }
 </script>
 
+
+<script>
+  function toggleCombined() {
+    const on = document.getElementById('show-combined').checked;
+    // Toggle chain tables
+    const factoryChain = document.querySelector('#chain > .panel-body');
+    const combinedChain = document.getElementById('combined-chain');
+    if (factoryChain && combinedChain) {
+      factoryChain.style.display = on ? 'none' : '';
+      combinedChain.style.display = on ? '' : 'none';
+    }
+    // Toggle budget grids
+    const fb = document.getElementById('budget-factory');
+    const cb = document.getElementById('budget-combined');
+    if (fb && cb) {
+      fb.style.display = on ? 'none' : '';
+      cb.style.display = on ? '' : 'none';
+    }
+    // Update product count
+    const countEl = document.getElementById('chain-count');
+    if (countEl) {
+      countEl.textContent = on
+        ? '{{ combined_result.products|length }} products (incl. fuel)'
+        : '{{ result.products|length }} products';
+    }
+    sessionStorage.setItem('show-combined', on ? '1' : '0');
+  }
+  // Restore toggle state
+  if (sessionStorage.getItem('show-combined') === '1') {
+    const cb = document.getElementById('show-combined');
+    if (cb) { cb.checked = true; toggleCombined(); }
+  }
+</script>
 
 <script>
   // Dynamic fuel type dropdown based on generator type selection
