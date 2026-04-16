@@ -78,19 +78,75 @@ class RecipeDB:
                 self.out_qty_for[(out_item, name)] = out_qty
 
     def default_recipe(self, product: str) -> Optional[str]:
-        """Pick a sensible default recipe for a product."""
+        """Pick a sensible default recipe for a product.
+        
+        Priority:
+        1. Non-alternate, sole-output recipe (product is the only output)
+        2. Non-alternate, primary-output recipe (product is first output)
+        3. Non-alternate, any recipe that produces it
+        4. Alternate, sole-output recipe
+        5. Alternate, primary-output recipe
+        6. Any recipe
+        """
         recs = self.producers.get(product, [])
         if not recs:
             return None
-        # Prefer non-Alternate where this product is the FIRST output (primary)
-        for rec_name in recs:
-            rec = self.recipes_by_name[rec_name]
-            if not rec_name.startswith("Alternate:") and rec["outputs"][0][0] == product:
-                return rec_name
-        # Fall back: any non-Alternate
-        for rec_name in recs:
-            if not rec_name.startswith("Alternate:"):
-                return rec_name
+        
+        std_sole, std_primary, std_other = [], [], []
+        alt_sole, alt_primary, alt_other = [], [], []
+        
+        for rn in recs:
+            r = self.recipes_by_name[rn]
+            is_alt = rn.startswith("Alternate:")
+            is_sole = len(r["outputs"]) == 1 and r["outputs"][0][0] == product
+            # Check if this product is truly the main output vs a byproduct.
+            # In multi-output recipes, if another output has a higher qty/cycle,
+            # our product is likely the byproduct (e.g. Compacted Coal in Ionized Fuel).
+            product_qty = next((q for o, q in r["outputs"] if o == product), 0)
+            max_other_qty = max((q for o, q in r["outputs"] if o != product), default=0)
+            is_byproduct = not is_sole and max_other_qty > product_qty
+            is_primary = r["outputs"][0][0] == product and not is_byproduct
+            
+            if not is_alt:
+                if is_sole:
+                    std_sole.append(rn)
+                elif is_primary:
+                    std_primary.append(rn)
+                else:
+                    std_other.append(rn)
+            else:
+                if is_sole:
+                    alt_sole.append(rn)
+                elif is_primary:
+                    alt_primary.append(rn)
+                else:
+                    alt_other.append(rn)
+        
+        # Return first match in priority order
+        # Standard dedicated/primary recipes first, then:
+        # - If the only standard options are true byproducts (product is minor output),
+        #   prefer a dedicated alternate over a byproduct standard recipe.
+        # - Otherwise standard recipes always beat alternates.
+        if std_sole:
+            return std_sole[0]
+        if std_primary:
+            return std_primary[0]
+        if std_other:
+            # Check if ALL std_other are true byproducts (product qty < max other qty)
+            all_byproducts = True
+            for rn in std_other:
+                r = self.recipes_by_name[rn]
+                pq = next((q for o, q in r["outputs"] if o == product), 0)
+                mq = max((q for o, q in r["outputs"] if o != product), default=0)
+                if pq >= mq:
+                    all_byproducts = False
+                    break
+            if all_byproducts and alt_sole:
+                return alt_sole[0]
+            return std_other[0]
+        for group in [alt_sole, alt_primary, alt_other]:
+            if group:
+                return group[0]
         return recs[0]
 
     def all_choices_for(self, product: str) -> List[str]:
