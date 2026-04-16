@@ -1,0 +1,19 @@
+services:
+  ficsit-planner:
+    build: .
+    container_name: ficsit-planner
+    restart: unless-stopped
+    ports:
+      - "8042:8000"
+    volumes:
+      - ./data:/app/data
+      - ./backend:/app/backend
+      - ./frontend:/app/frontend
+    environment:
+      - TZ=America/Denver
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
