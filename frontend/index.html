@@ -519,15 +519,23 @@
 
   /* Power plants */
   .pp-row {
-    display: grid;
-    grid-template-columns: auto 1fr 70px 60px 70px auto;
-    gap: 6px;
-    align-items: center;
-    padding: 6px 8px;
+    padding: 8px 10px;
     background: var(--bg-deep);
     border: 1px solid var(--border);
     border-radius: 3px;
     margin-bottom: 6px;
+  }
+  .pp-row-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+  .pp-row-bottom {
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
   .pp-row .pp-type {
     font-size: 10px;
@@ -726,21 +734,27 @@
       <div class="panel-body">
         {% for pp in pp_stats %}
         <div class="pp-row">
-          <span class="pp-type">{{ pp.generator_type|replace(' Generator','')|replace(' Power Plant','') }}</span>
-          <span class="pp-fuel">{{ pp.fuel_type }} ({{ "{:,.1f}".format(pp.fuel_per_min) }}/min)</span>
-          <form method="post" action="/api/powerplants/{{ pp.id }}/update" style="display:contents">
-            <input type="number" name="count" value="{{ pp.count }}" min="1" step="1"
-                   style="width:60px; padding:2px 4px; font-size:11px; text-align:right; -moz-appearance:textfield;"
-                   onchange="this.form.submit()" title="Number of generators">
-            <input type="number" name="clock_pct" value="{{ pp.clock_pct|int }}" min="1" max="250" step="1"
-                   style="width:52px; padding:2px 4px; font-size:11px; text-align:right; -moz-appearance:textfield;"
-                   onchange="this.form.submit()" title="Clock speed %">
-          </form>
-          <span class="pp-output" title="{{ "{:,.0f}".format(pp.mw_total) }} MW">{{ "{:,.0f}".format(pp.mw_total) }}</span>
-          <a href="/powerplant/{{ pp.id }}" style="color:var(--accent); font-size:10px; text-decoration:none; font-weight:600;" title="View production chain">View</a>
-          <form method="post" action="/api/powerplants/{{ pp.id }}/delete" style="display:inline">
-            <button type="submit" class="danger" title="Remove" style="padding:2px 6px;">×</button>
-          </form>
+          <div class="pp-row-top">
+            <span class="pp-type">{{ pp.generator_type|replace(' Generator','')|replace(' Power Plant','') }}</span>
+            <span class="pp-output">{{ "{:,.0f}".format(pp.mw_total) }} MW</span>
+          </div>
+          <div class="pp-row-bottom">
+            <span class="pp-fuel" style="flex:1; min-width:0;">{{ pp.fuel_type }}</span>
+            <form method="post" action="/api/powerplants/{{ pp.id }}/update" style="display:flex; gap:4px; align-items:center;">
+              <input type="number" name="count" value="{{ pp.count }}" min="1" step="1"
+                     style="width:52px; padding:2px 4px; font-size:11px; text-align:right; -moz-appearance:textfield;"
+                     onchange="this.form.submit()" title="Count">
+              <span style="color:var(--text-faint);font-size:10px;">×</span>
+              <input type="number" name="clock_pct" value="{{ pp.clock_pct|int }}" min="1" max="250" step="1"
+                     style="width:48px; padding:2px 4px; font-size:11px; text-align:right; -moz-appearance:textfield;"
+                     onchange="this.form.submit()" title="Clock %">
+              <span style="color:var(--text-faint);font-size:10px;">%</span>
+            </form>
+            <a href="/powerplant/{{ pp.id }}" class="btn ghost" style="padding:2px 8px; font-size:10px; text-decoration:none;">View</a>
+            <form method="post" action="/api/powerplants/{{ pp.id }}/delete" style="display:inline">
+              <button type="submit" class="danger" title="Remove" style="padding:2px 6px;">×</button>
+            </form>
+          </div>
         </div>
         {% endfor %}
 

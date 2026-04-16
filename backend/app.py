@@ -631,57 +631,108 @@ def load_factory(factory_id: int):
 
 @app.get("/world", response_class=HTMLResponse)
 def world_view(request: Request):
-    """Aggregate all factories into one combined world view."""
+    """Aggregate all factories + power plants by solving each individually and summing results."""
     with get_db() as conn:
         plan_id = get_active_plan_id(conn)
         factories_list = load_factories_summary(conn)
 
-        merged_targets = {}
-        merged_choices = {}
-        merged_clocks = {}
-        for f in factories_list:
-            ftargets = conn.execute(
-                "SELECT product, rate_per_min FROM factory_targets WHERE factory_id=?",
-                (f["id"],)
-            ).fetchall()
-            for t in ftargets:
-                merged_targets[t["product"]] = merged_targets.get(t["product"], 0) + t["rate_per_min"]
-            fchoices = conn.execute(
-                "SELECT product, recipe FROM factory_choices WHERE factory_id=?",
-                (f["id"],)
-            ).fetchall()
-            for c in fchoices:
-                merged_choices[c["product"]] = c["recipe"]
-
-
-        # Also merge power plant fuel demand from active plan
-        pplants = conn.execute(
-            "SELECT * FROM power_plants WHERE plan_id=? ORDER BY id", (plan_id,)
-        ).fetchall()
-        pp_total_gen = 0
-        world_waste = {}
-        for pp in pplants:
-            gen = GENERATORS.get(pp["generator_type"], {})
-            fuel_rate = gen.get("fuels", {}).get(pp["fuel_type"], 0)
-            water_rate = gen.get("water_per_min", 0)
-            waste_rates = gen.get("waste", {}).get(pp["fuel_type"], {})
-            clock = pp["clock_pct"] / 100.0
-            total_fuel = fuel_rate * pp["count"] * clock
-            total_water = water_rate * pp["count"] * clock
-            merged_targets[pp["fuel_type"]] = merged_targets.get(pp["fuel_type"], 0) + total_fuel
-            if total_water > 0:
-                merged_targets["Water"] = merged_targets.get("Water", 0) + total_water
-            for w, r in waste_rates.items():
-                world_waste[w] = world_waste.get(w, 0) + r * pp["count"] * clock
-            pp_total_gen += gen.get("power_mw", 0) * pp["count"] * clock
-
-        result = solve(merged_targets, merged_choices, db, MACHINE_POWER, merged_clocks)
-
+        # Load plan-level resources, choices, clocks
+        plan_choices = {c["product"]: c["recipe"] for c in conn.execute(
+            "SELECT product, recipe FROM recipe_choices WHERE plan_id=?", (plan_id,)
+        ).fetchall()}
+        plan_clocks = {c["product"]: c["clock_pct"] for c in conn.execute(
+            "SELECT product, clock_pct FROM clock_overrides WHERE plan_id=?", (plan_id,)
+        ).fetchall()}
         resources = conn.execute(
             "SELECT resource, pure, normal, impure, miner_tier FROM resources WHERE plan_id=? ORDER BY id",
             (plan_id,)
         ).fetchall()
 
+        # Solve each factory individually
+        world_raws = {}  # raw -> total demand
+        world_power = 0
+        world_products = {}  # product -> {total_per_min, machines, power, ...}
+        factory_details = []
+
+        for f in factories_list:
+            ftargets = {t["product"]: t["rate_per_min"] for t in f["targets"]}
+            fchoices = {c["product"]: c["recipe"] for c in conn.execute(
+                "SELECT product, recipe FROM factory_choices WHERE factory_id=?",
+                (f["id"],)
+            ).fetchall()}
+            fresult = solve(ftargets, fchoices, db, MACHINE_POWER, plan_clocks)
+            factory_details.append({"name": f["name"], "power": fresult["total_power"], "targets": f["targets"]})
+            world_power += fresult["total_power"]
+            for raw, rate in fresult["raws"].items():
+                world_raws[raw] = world_raws.get(raw, 0) + rate
+            for p in fresult["products"]:
+                if p["name"] in world_products:
+                    wp = world_products[p["name"]]
+                    wp["total_per_min"] += p["total_per_min"]
+                    wp["power_total"] += p["power_total"]
+                    if p["machines_ceil"]:
+                        wp["machines_ceil"] = (wp["machines_ceil"] or 0) + p["machines_ceil"]
+                else:
+                    world_products[p["name"]] = {**p}
+
+        # Solve each power plant individually
+        pplants = conn.execute(
+            "SELECT * FROM power_plants WHERE plan_id=? ORDER BY id", (plan_id,)
+        ).fetchall()
+        pp_total_gen = 0
+        world_waste = {}
+        pp_details = []
+
+        for pp in pplants:
+            pp = dict(pp)
+            gen = GENERATORS.get(pp["generator_type"], {})
+            base_mw = gen.get("power_mw", 0)
+            fuel_rate = gen.get("fuels", {}).get(pp["fuel_type"], 0)
+            water_rate = gen.get("water_per_min", 0)
+            waste_rates = gen.get("waste", {}).get(pp["fuel_type"], {})
+            clock = pp["clock_pct"] / 100.0
+            total_mw = base_mw * pp["count"] * clock
+            total_fuel = fuel_rate * pp["count"] * clock
+            total_water = water_rate * pp["count"] * clock
+            pp_total_gen += total_mw
+
+            for w, r in waste_rates.items():
+                world_waste[w] = world_waste.get(w, 0) + r * pp["count"] * clock
+
+            # Solve the fuel chain for this power plant
+            pp_targets = {pp["fuel_type"]: total_fuel}
+            if total_water > 0:
+                pp_targets["Water"] = total_water
+            pp_result = solve(pp_targets, plan_choices, db, MACHINE_POWER, plan_clocks)
+
+            pp_details.append({
+                "id": pp["id"], "name": pp.get("name", ""),
+                "generator_type": pp["generator_type"],
+                "fuel_type": pp["fuel_type"],
+                "count": pp["count"], "clock_pct": pp["clock_pct"],
+                "mw_total": total_mw,
+                "fuel_per_min": total_fuel,
+                "chain_power": pp_result["total_power"],
+            })
+
+            world_power += pp_result["total_power"]
+            for raw, rate in pp_result["raws"].items():
+                world_raws[raw] = world_raws.get(raw, 0) + rate
+            for p in pp_result["products"]:
+                if p["name"] in world_products:
+                    wp = world_products[p["name"]]
+                    wp["total_per_min"] += p["total_per_min"]
+                    wp["power_total"] += p["power_total"]
+                    if p["machines_ceil"]:
+                        wp["machines_ceil"] = (wp["machines_ceil"] or 0) + p["machines_ceil"]
+                else:
+                    world_products[p["name"]] = {**p}
+
+    # Build sorted products list (intermediates first, then raws)
+    products_list = sorted(world_products.values(),
+                          key=lambda p: (1 if p["is_raw"] else 0, p["name"]))
+
+    # Build budget from summed raws
     available = {}
     for r in resources:
         available[r["resource"]] = calculate_available(
@@ -690,7 +741,7 @@ def world_view(request: Request):
 
     budget = []
     for raw in BUDGET_RAWS:
-        demand = result["raws"].get(raw, 0)
+        demand = world_raws.get(raw, 0)
         avail = available.get(raw, 0)
         surplus = avail - demand
         util = (demand / avail * 100) if avail > 0 else 0
@@ -702,10 +753,11 @@ def world_view(request: Request):
     return templates.TemplateResponse("world.html", {
         "request": request,
         "factories": factories_list,
-        "result": result,
+        "factory_details": factory_details,
+        "pp_details": pp_details,
+        "result": {"products": products_list, "total_power": world_power},
         "budget": budget,
-        "merged_targets": merged_targets,
-        "total_power": result["total_power"],
+        "total_power": world_power,
         "pp_total_generation": pp_total_gen,
         "world_waste": world_waste,
         "machines_info": MACHINES,
