@@ -151,7 +151,7 @@
         <div class="target-row">
           <span class="target-name">{{ t.product }}</span>
           <form action="/api/factories/{{ factory.id }}/targets/{{ t.id }}/update" method="post" class="target-edit-form">
-            <input type="number" name="rate" value="{{ t.rate_per_min }}" step="0.01" min="0.01" class="rate-input">
+            <input type="number" name="rate" value="{{ t.rate_per_min }}" step="0.0001" min="0.01" class="rate-input">
             <span class="rate-unit">/min</span>
             <button type="submit" class="btn-sm btn-save" title="Save">&#10003;</button>
           </form>
@@ -167,7 +167,7 @@
           <option value="{{ p }}">{{ p }}</option>
           {% endfor %}
         </select>
-        <input type="number" name="rate" value="1" step="0.01" min="0.01" class="rate-input" placeholder="rate/min">
+        <input type="number" name="rate" value="1" step="0.0001" min="0.01" class="rate-input" placeholder="rate/min">
         <button type="submit" class="btn-sm btn-add">+ Add</button>
       </form>
     </div>
