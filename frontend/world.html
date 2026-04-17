@@ -189,10 +189,10 @@
       <div class="label">World Total Power Demand</div>
       <div class="value">{{ "{:,.0f}".format(total_power) }}<span class="unit">MW</span></div>
     </div>
-    {% if total_sloops_used is defined and total_sloops_used > 0 %}
+    {% if total_sloops_used is defined %}
     <div class="power-card" style="border-color: #a78bfa;">
-      <div class="label">Somersloops Used</div>
-      <div class="value" style="color: #a78bfa;">{{ total_sloops_used }}<span class="unit">/ {{ total_somersloops }}</span></div>
+      <div class="label">Somersloops</div>
+      <div class="value" style="color: #a78bfa;">{{ sloop_mam + sloop_apa_used + total_sloops_used }}<span class="unit">/ {{ total_somersloops }}</span></div>
     </div>
     {% endif %}
   </div>
@@ -224,6 +224,54 @@
       </div>
     </div>
   </div>
+
+  <!-- Somersloop Budget -->
+  {% if total_somersloops is defined %}
+  <div class="panel" id="sloop-budget">
+    <div class="panel-header">
+      <h2>Somersloop Budget</h2>
+      <span class="meta" style="color: #a78bfa;">{{ total_somersloops }} total on map</span>
+    </div>
+    <div class="panel-body">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+        <!-- MAM Research -->
+        <div style="background:var(--bg-deep); border:1px solid var(--border); border-left: 3px solid var(--text-dim); border-radius:6px; padding:12px 14px;">
+          <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">MAM Research</div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:20px; font-weight:700; color:var(--text-dim);">{{ sloop_mam }}</div>
+          <div style="font-size:10px; color:var(--text-faint);">Fixed cost (analysis + unlocks)</div>
+        </div>
+
+        <!-- Alien Power Augmenters -->
+        <div style="background:var(--bg-deep); border:1px solid var(--border); border-left: 3px solid #fbbf24; border-radius:6px; padding:12px 14px;">
+          <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Power Augmenters</div>
+          <div style="display:flex; align-items:baseline; gap:6px;">
+            <form method="post" action="/api/sloops/budget" style="display:flex; align-items:center; gap:6px;">
+              <input type="number" name="apa_count" value="{{ sloop_apa_count }}" min="0" max="10" step="1"
+                     style="width:50px; background:var(--bg-elev); border:1px solid var(--border); color:#fbbf24; font-family:'JetBrains Mono',monospace; font-size:16px; font-weight:700; padding:4px 8px; border-radius:3px; text-align:center;"
+                     onchange="this.form.submit()">
+              <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-dim);">× 10 = {{ sloop_apa_used }}</span>
+            </form>
+          </div>
+        </div>
+
+        <!-- Production Amplification -->
+        <div style="background:var(--bg-deep); border:1px solid var(--border); border-left: 3px solid #a78bfa; border-radius:6px; padding:12px 14px;">
+          <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Production Amplification</div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:20px; font-weight:700; color:#a78bfa;">{{ total_sloops_used }}</div>
+          <div style="font-size:10px; color:var(--text-faint);">Used across factories</div>
+        </div>
+
+        <!-- Remaining -->
+        {% set remaining = total_somersloops - sloop_mam - sloop_apa_used - total_sloops_used %}
+        <div style="background:var(--bg-deep); border:1px solid var(--border); border-left: 3px solid {{ '#4ade80' if remaining >= 0 else '#ef4444' }}; border-radius:6px; padding:12px 14px;">
+          <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Available</div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:20px; font-weight:700; color:{{ '#4ade80' if remaining >= 0 else '#ef4444' }};">{{ remaining }}</div>
+          <div style="font-size:10px; color:var(--text-faint);">{{ total_somersloops }} − {{ sloop_mam }} − {{ sloop_apa_used }} − {{ total_sloops_used }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
 
   <!-- Waste balance -->
   {% if waste_balance is defined and waste_balance %}

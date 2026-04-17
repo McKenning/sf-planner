@@ -140,6 +140,12 @@ def init_db():
             UNIQUE(factory_id, product),
             FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS sloop_budget (
+            id INTEGER PRIMARY KEY,
+            mam_used INTEGER NOT NULL DEFAULT 3,
+            apa_count INTEGER NOT NULL DEFAULT 0
+        );
+        INSERT OR IGNORE INTO sloop_budget (id, mam_used, apa_count) VALUES (1, 3, 0);
         """)
         # Create a default plan if none exists
         cur = conn.execute("SELECT COUNT(*) c FROM plans")
@@ -519,6 +525,16 @@ def clear_factory_sloops(factory_id: int):
     with get_db() as conn:
         conn.execute("DELETE FROM factory_sloop_overrides WHERE factory_id=?", (factory_id,))
     return RedirectResponse(f"/factory/{factory_id}#chain", status_code=303)
+
+@app.post("/api/sloops/budget")
+def update_sloop_budget(apa_count: int = Form(0)):
+    """Update the number of Alien Power Augmenters built."""
+    apa_count = max(0, min(10, apa_count))
+    with get_db() as conn:
+        conn.execute("UPDATE sloop_budget SET apa_count=? WHERE id=1", (apa_count,))
+    return RedirectResponse("/world#sloop-budget", status_code=303)
+
+
 
 
 
@@ -1036,6 +1052,12 @@ def world_view(request: Request):
         plan_id = get_active_plan_id(conn)
         factories_list = load_factories_summary(conn)
 
+        # Load sloop budget
+        sloop_budget_row = conn.execute("SELECT * FROM sloop_budget WHERE id=1").fetchone()
+        sloop_mam = sloop_budget_row["mam_used"] if sloop_budget_row else 3
+        sloop_apa_count = sloop_budget_row["apa_count"] if sloop_budget_row else 0
+        sloop_apa_used = sloop_apa_count * 10
+
         # Load plan-level resources, choices, clocks
         plan_choices = {c["product"]: c["recipe"] for c in conn.execute(
             "SELECT product, recipe FROM recipe_choices WHERE plan_id=?", (plan_id,)
@@ -1315,6 +1337,10 @@ def world_view(request: Request):
         "total_somersloops": TOTAL_SOMERSLOOPS,
         "hostname": HOSTNAME,
         "total_sloops_used": total_sloops_used,
+        "sloop_mam": sloop_mam,
+        "sloop_apa_count": sloop_apa_count,
+        "sloop_apa_used": sloop_apa_used,
+        "sloop_available": TOTAL_SOMERSLOOPS - sloop_mam - sloop_apa_used,
         "total_somersloops": TOTAL_SOMERSLOOPS,
         "sloop_slots": SLOOP_SLOTS,
     })
