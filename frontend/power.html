@@ -166,7 +166,9 @@
         <tbody>
           {% for pp in pp_stats %}
           <tr>
-            <td><strong><a href="/powerplant/{{ pp.id }}" style="color:var(--text); text-decoration:none;">{{ pp.generator_type }}</a></strong></td>
+            <td><strong><a href="/powerplant/{{ pp.id }}" style="color:var(--text); text-decoration:none;">{{ pp.name if pp.name else pp.generator_type }}</a></strong>
+              {% if pp.name %}<div style="font-size:10px; color:var(--text-dim);">{{ pp.generator_type }}</div>{% endif %}
+            </td>
             <td class="mono">{{ pp.fuel_type }}</td>
             <td class="right mono">{{ pp.count }}</td>
             <td class="right mono">{{ pp.clock_pct|int }}%</td>

@@ -735,7 +735,10 @@
         {% for pp in pp_stats %}
         <div class="pp-row">
           <div class="pp-row-top">
-            <span class="pp-type">{{ pp.generator_type|replace(' Generator','')|replace(' Power Plant','') }}</span>
+            <div>
+              <span class="pp-type">{{ pp.generator_type|replace(' Generator','')|replace(' Power Plant','') }}</span>
+              {% if pp.name %}<span style="color:var(--text); font-size:12px; font-weight:600; margin-left:6px;">{{ pp.name }}</span>{% endif %}
+            </div>
             <span class="pp-output">{{ "{:,.0f}".format(pp.mw_total) }} MW</span>
           </div>
           <div class="pp-row-bottom">
@@ -777,6 +780,7 @@
 
         <form class="pp-add-form" method="post" action="/api/powerplants/add">
           <input type="hidden" name="plan_id" value="{{ plan_id }}">
+          <input type="text" name="pp_name" placeholder="Name (optional)" style="grid-column:1/-1; font-size:12px; padding:4px 6px;">
           <select name="generator_type" id="pp-gen-select" onchange="updateFuelOptions()">
             {% for gtype in generators %}
             <option value="{{ gtype }}">{{ gtype }}</option>
@@ -787,7 +791,7 @@
           <div class="pp-add-row2">
             <input type="number" name="count" value="1" min="1" step="1" placeholder="#" title="Count">
             <span style="color:var(--text-dim);font-size:11px;">×</span>
-            <input type="number" name="clock_pct" value="100" min="1" max="250" step="1" placeholder="%" title="Clock %">
+            <input type="number" name="clock_pct" value="250" min="1" max="250" step="1" placeholder="%" title="Clock %">
             <span style="color:var(--text-dim);font-size:11px;">%</span>
             <button type="submit" style="margin-left:auto;">Add</button>
           </div>
