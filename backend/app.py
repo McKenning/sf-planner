@@ -959,6 +959,13 @@ def world_view(request: Request):
                 else:
                     world_products[p["name"]] = {**p}
 
+        # Determine which products factories already produce
+        # (their full chain is already accounted for in factory solves above)
+        factory_target_products = set()
+        for f in factories_list:
+            for t in f["targets"]:
+                factory_target_products.add(t["product"])
+
         # Solve each power plant individually
         pplants = conn.execute(
             "SELECT * FROM power_plants WHERE plan_id=? ORDER BY id", (plan_id,)
@@ -984,37 +991,55 @@ def world_view(request: Request):
             for w, r in waste_rates.items():
                 world_waste[w] = world_waste.get(w, 0) + r * pp["count"] * clock
 
-            # Solve the fuel chain for this power plant
-            pp_targets = {pp["fuel_type"]: total_fuel}
-            if total_water > 0:
-                pp_targets["Water"] = total_water
-            pp_result = solve(pp_targets, plan_choices, db, MACHINE_POWER, plan_clocks)
+            # Solve the fuel chain — but only if no factory already produces this fuel.
+            # If a factory targets this fuel type, its full production chain (including
+            # all upstream raw demands) is already counted in the factory solves above.
+            # The PP is just a consumer of the factory's output in that case.
+            fuel_from_factory = pp["fuel_type"] in factory_target_products
 
-            pp_details.append({
-                "id": pp["id"], "name": pp.get("name", ""),
-                "generator_type": pp["generator_type"],
-                "fuel_type": pp["fuel_type"],
-                "count": pp["count"], "clock_pct": pp["clock_pct"],
-                "mw_total": total_mw,
-                "fuel_per_min": total_fuel,
-                "chain_power": pp_result["total_power"],
-            })
+            if fuel_from_factory:
+                # Factory already handles the full chain; no independent solve needed
+                pp_details.append({
+                    "id": pp["id"], "name": pp.get("name", ""),
+                    "generator_type": pp["generator_type"],
+                    "fuel_type": pp["fuel_type"],
+                    "count": pp["count"], "clock_pct": pp["clock_pct"],
+                    "mw_total": total_mw,
+                    "fuel_per_min": total_fuel,
+                    "chain_power": 0,
+                    "factory_sourced": True,
+                })
+            else:
+                pp_targets = {pp["fuel_type"]: total_fuel}
+                if total_water > 0:
+                    pp_targets["Water"] = total_water
+                pp_result = solve(pp_targets, plan_choices, db, MACHINE_POWER, plan_clocks)
 
-            world_power += pp_result["total_power"]
-            for raw, rate in pp_result["raws"].items():
-                world_raws[raw] = world_raws.get(raw, 0) + rate
-                # Track waste consumed by fuel chains separately
-                if raw in ("Uranium Waste", "Plutonium Waste"):
-                    world_waste_consumed[raw] = world_waste_consumed.get(raw, 0) + rate
-            for p in pp_result["products"]:
-                if p["name"] in world_products:
-                    wp = world_products[p["name"]]
-                    wp["total_per_min"] += p["total_per_min"]
-                    wp["power_total"] += p["power_total"]
-                    if p["machines_ceil"]:
-                        wp["machines_ceil"] = (wp["machines_ceil"] or 0) + p["machines_ceil"]
-                else:
-                    world_products[p["name"]] = {**p}
+                pp_details.append({
+                    "id": pp["id"], "name": pp.get("name", ""),
+                    "generator_type": pp["generator_type"],
+                    "fuel_type": pp["fuel_type"],
+                    "count": pp["count"], "clock_pct": pp["clock_pct"],
+                    "mw_total": total_mw,
+                    "fuel_per_min": total_fuel,
+                    "chain_power": pp_result["total_power"],
+                    "factory_sourced": False,
+                })
+
+                world_power += pp_result["total_power"]
+                for raw, rate in pp_result["raws"].items():
+                    world_raws[raw] = world_raws.get(raw, 0) + rate
+                    if raw in ("Uranium Waste", "Plutonium Waste"):
+                        world_waste_consumed[raw] = world_waste_consumed.get(raw, 0) + rate
+                for p in pp_result["products"]:
+                    if p["name"] in world_products:
+                        wp = world_products[p["name"]]
+                        wp["total_per_min"] += p["total_per_min"]
+                        wp["power_total"] += p["power_total"]
+                        if p["machines_ceil"]:
+                            wp["machines_ceil"] = (wp["machines_ceil"] or 0) + p["machines_ceil"]
+                    else:
+                        world_products[p["name"]] = {**p}
 
     # Build sorted products list (intermediates first, then raws)
     products_list = sorted(world_products.values(),
