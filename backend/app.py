@@ -140,6 +140,14 @@ def init_db():
             UNIQUE(factory_id, product),
             FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS factory_clock_overrides (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            factory_id INTEGER NOT NULL,
+            product TEXT NOT NULL,
+            clock_pct REAL NOT NULL DEFAULT 100,
+            UNIQUE(factory_id, product),
+            FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE
+        );
         CREATE TABLE IF NOT EXISTS sloop_budget (
             id INTEGER PRIMARY KEY,
             mam_used INTEGER NOT NULL DEFAULT 3,
@@ -525,6 +533,34 @@ def clear_factory_sloops(factory_id: int):
     with get_db() as conn:
         conn.execute("DELETE FROM factory_sloop_overrides WHERE factory_id=?", (factory_id,))
     return RedirectResponse(f"/factory/{factory_id}#chain", status_code=303)
+
+@app.post("/api/factories/{factory_id}/clock/set")
+def set_factory_clock(factory_id: int, product: str = Form(...), clock_pct: float = Form(...)):
+    """Set clock override for a product on a factory."""
+    clock_pct = max(1, min(250, clock_pct))
+    with get_db() as conn:
+        if abs(clock_pct - 100.0) < 0.01:
+            # 100% is default — just delete the override
+            conn.execute(
+                "DELETE FROM factory_clock_overrides WHERE factory_id=? AND product=?",
+                (factory_id, product)
+            )
+        else:
+            existing = conn.execute(
+                "SELECT id FROM factory_clock_overrides WHERE factory_id=? AND product=?",
+                (factory_id, product)
+            ).fetchone()
+            if existing:
+                conn.execute("UPDATE factory_clock_overrides SET clock_pct=? WHERE id=?",
+                             (clock_pct, existing["id"]))
+            else:
+                conn.execute(
+                    "INSERT INTO factory_clock_overrides (factory_id, product, clock_pct) VALUES (?,?,?)",
+                    (factory_id, product, clock_pct)
+                )
+    return RedirectResponse(f"/factory/{factory_id}#chain", status_code=303)
+
+
 
 @app.post("/api/sloops/budget")
 def update_sloop_budget(apa_count: int = Form(0)):
@@ -1086,7 +1122,12 @@ def world_view(request: Request):
                 "SELECT product, slooped FROM factory_sloop_overrides WHERE factory_id=?",
                 (f["id"],)
             ).fetchall()}
-            fresult = solve(ftargets, fchoices, db, MACHINE_POWER, plan_clocks, fsloops, SLOOP_SLOTS)
+            fclocks = {c["product"]: c["clock_pct"] for c in conn.execute(
+                "SELECT product, clock_pct FROM factory_clock_overrides WHERE factory_id=?",
+                (f["id"],)
+            ).fetchall()}
+            fmerged_clocks = {**plan_clocks, **fclocks}
+            fresult = solve(ftargets, fchoices, db, MACHINE_POWER, fmerged_clocks, fsloops, SLOOP_SLOTS)
             factory_details.append({"name": f["name"], "power": fresult["total_power"], "targets": f["targets"], "products": fresult["products"]})
             world_power += fresult["total_power"]
             for raw, rate in fresult["raws"].items():
@@ -1378,10 +1419,16 @@ def factory_detail(request: Request, factory_id: int):
         ).fetchall()
         sloops_dict = {s["product"]: bool(s["slooped"]) for s in fsloops}
 
-        # Load plan-level clocks and resources
+        # Load factory-specific clock overrides, falling back to plan-level
         plan_clocks = {c["product"]: c["clock_pct"] for c in conn.execute(
             "SELECT product, clock_pct FROM clock_overrides WHERE plan_id=?", (plan_id,)
         ).fetchall()}
+        factory_clocks = {c["product"]: c["clock_pct"] for c in conn.execute(
+            "SELECT product, clock_pct FROM factory_clock_overrides WHERE factory_id=?",
+            (factory_id,)
+        ).fetchall()}
+        # Merge: factory overrides take precedence over plan
+        merged_clocks = {**plan_clocks, **factory_clocks}
         resources = conn.execute(
             "SELECT resource, pure, normal, impure, miner_tier FROM resources WHERE plan_id=? ORDER BY id",
             (plan_id,)
@@ -1389,7 +1436,7 @@ def factory_detail(request: Request, factory_id: int):
 
     # Solve
     targets = {t["product"]: t["rate_per_min"] for t in ftargets}
-    result = solve(targets, choices_dict, db, MACHINE_POWER, plan_clocks, sloops_dict, SLOOP_SLOTS)
+    result = solve(targets, choices_dict, db, MACHINE_POWER, merged_clocks, sloops_dict, SLOOP_SLOTS)
 
     # Budget
     available = {}

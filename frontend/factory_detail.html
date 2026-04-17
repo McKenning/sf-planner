@@ -301,7 +301,17 @@
               <td class="recipe-cell">{{ p.recipe or '—' }}</td>
               <td>{{ p.machine or '—' }}</td>
               <td class="machine-cell center">{{ p.machines_ceil if p.machines_ceil else '—' }}</td>
-              <td class="right">{{ "{:.1f}%".format(p.clock_pct) if p.clock_pct else '—' }}</td>
+              <td class="right">
+                {% if p.clock_pct is not none and not p.is_raw %}
+                <form method="post" action="/api/factories/{{ factory.id }}/clock/set" style="display:inline">
+                  <input type="hidden" name="product" value="{{ p.name }}">
+                  <input type="number" name="clock_pct" value="{{ "{:.0f}".format(p.target_clock) }}"
+                         min="1" max="250" step="1"
+                         style="width:52px; padding:2px 4px; font-size:11px; text-align:right; background:var(--bg-deep); border:1px solid var(--border); color:var(--text); border-radius:3px; font-family:'JetBrains Mono',monospace; -moz-appearance:textfield;"
+                         onchange="this.form.submit()">
+                </form>
+                {% else %}—{% endif %}
+              </td>
               <td class="right">{{ "{:,.1f}".format(p.power_total) if p.power_total else '—' }}</td>
               <td class="center">
                 {% if p.machine and not p.is_raw and sloop_slots.get(p.machine, 0) > 0 %}
