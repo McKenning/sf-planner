@@ -178,7 +178,9 @@ def solve(targets: Dict[str, float],
           choices: Dict[str, str],
           db: RecipeDB,
           machine_power: Dict[str, float],
-          clock_overrides: Dict[str, float] = None) -> dict:
+          clock_overrides: Dict[str, float] = None,
+          sloop_overrides: Dict[str, bool] = None,
+          sloop_slots: Dict[str, int] = None) -> dict:
     """
     Walk the production graph. Returns:
       {
@@ -191,6 +193,10 @@ def solve(targets: Dict[str, float],
     """
     if clock_overrides is None:
         clock_overrides = {}
+    if sloop_overrides is None:
+        sloop_overrides = {}
+    if sloop_slots is None:
+        sloop_slots = {}
 
     needed = defaultdict(float)
     for prod, rate in targets.items():
@@ -280,7 +286,9 @@ def solve(targets: Dict[str, float],
             out_per_min_100 = out_qty * cycles_per_min
             if out_per_min_100 <= 0:
                 continue
-            scale = needed[p] / out_per_min_100
+            # Somersloop doubles effective output per machine — halves scale
+            sloop_mult = 2.0 if sloop_overrides.get(p, False) else 1.0
+            scale = needed[p] / (out_per_min_100 * sloop_mult)
             for ing, ing_qty in rec["inputs"]:
                 ing_per_min = ing_qty * cycles_per_min * scale
                 added[ing] += ing_per_min
@@ -334,12 +342,33 @@ def solve(targets: Dict[str, float],
         out_per_min_100 = out_qty * cycles_per_min
         target_clock = clock_overrides.get(p, 100.0)
         out_per_min_clocked = out_per_min_100 * (target_clock / 100.0)
-        scale = rate / out_per_min_100  # fractional machines at 100%
-        machines_ceil = -(-rate // out_per_min_clocked) if out_per_min_clocked > 0 else 0
+
+        # Somersloop: doubles output per machine, 4x power per machine
+        is_slooped = sloop_overrides.get(p, False)
+        sloop_multiplier = 2.0 if is_slooped else 1.0
+        sloop_power_mult = 4.0 if is_slooped else 1.0
+        slots_per_machine = sloop_slots.get(rec["machine"], 0) if is_slooped else 0
+
+        # With slooping, each machine produces sloop_multiplier * out_per_min_clocked
+        effective_out_per_machine = out_per_min_clocked * sloop_multiplier
+        scale = rate / (out_per_min_100 * sloop_multiplier)  # fractional machines accounting for sloop
+        machines_ceil = -(-rate // effective_out_per_machine) if effective_out_per_machine > 0 else 0
         machines_ceil = max(1, int(machines_ceil))
-        per_machine_clock = (rate / (machines_ceil * out_per_min_100)) * 100 if machines_ceil > 0 else 0
-        power = machine_power.get(rec["machine"], 0) * scale
+        per_machine_clock = (rate / (machines_ceil * out_per_min_100 * sloop_multiplier)) * 100 if machines_ceil > 0 else 0
+
+        # Power: base power * scale for total demand, but slooped machines cost 4x
+        # scale represents fractional machines at 100% unslooped output
+        # With slooping, we need half the scale but each machine costs 4x power
+        # Net: power = base_power * (scale / sloop_multiplier) * sloop_power_mult
+        #     = base_power * scale * (sloop_power_mult / sloop_multiplier)
+        #     = base_power * scale * 2.0 (when slooped: 4x power / 2x output)
+        power_per_unit = machine_power.get(rec["machine"], 0)
+        power = power_per_unit * scale * (sloop_power_mult / sloop_multiplier)
         total_power += power
+
+        # Sloop cost: slots_per_machine * machines_ceil
+        sloops_used = slots_per_machine * machines_ceil if is_slooped else 0
+
         ingredients = []
         for ing, ing_qty in rec["inputs"]:
             ingredients.append({
@@ -358,6 +387,8 @@ def solve(targets: Dict[str, float],
             "ingredients": ingredients,
             "is_raw": False,
             "is_target": p in targets,
+            "is_slooped": is_slooped,
+            "sloops_used": sloops_used,
         })
 
     # Concatenate: intermediates first, then raws

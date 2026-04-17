@@ -6,19 +6,19 @@ Source: MAZ01001/SatisfactoryFlowchart data.json (game Docs.json-derived)
 # Machine power consumption (MW base, at 100% clock)
 # Source: Satisfactory wiki
 MACHINES = {
-    "Smelter":              {"power": 4,    "inputs": 1, "outputs": 1},
-    "Foundry":              {"power": 16,   "inputs": 2, "outputs": 1},
-    "Constructor":          {"power": 4,    "inputs": 1, "outputs": 1},
-    "Assembler":            {"power": 15,   "inputs": 2, "outputs": 1},
-    "Manufacturer":         {"power": 55,   "inputs": 4, "outputs": 1},
-    "Refinery":             {"power": 30,   "inputs": 2, "outputs": 2},
-    "Blender":              {"power": 75,   "inputs": 4, "outputs": 2},
-    "Packager":             {"power": 10,   "inputs": 2, "outputs": 2},
-    "Particle Accelerator": {"power": 1000, "inputs": 3, "outputs": 1},  # avg, varies
-    "Quantum Encoder":      {"power": 2000, "inputs": 4, "outputs": 2},  # avg
-    "Converter":            {"power": 500,  "inputs": 2, "outputs": 1},  # avg
-    "Crafting Bench":       {"power": 0,    "inputs": 4, "outputs": 1},  # manual
-    "Equipment Workshop":   {"power": 0,    "inputs": 4, "outputs": 1},  # manual
+    "Smelter":              {"power": 4,    "inputs": 1, "outputs": 1, "sloop_slots": 1},
+    "Foundry":              {"power": 16,   "inputs": 2, "outputs": 1, "sloop_slots": 2},
+    "Constructor":          {"power": 4,    "inputs": 1, "outputs": 1, "sloop_slots": 1},
+    "Assembler":            {"power": 15,   "inputs": 2, "outputs": 1, "sloop_slots": 2},
+    "Manufacturer":         {"power": 55,   "inputs": 4, "outputs": 1, "sloop_slots": 4},
+    "Refinery":             {"power": 30,   "inputs": 2, "outputs": 2, "sloop_slots": 2},
+    "Blender":              {"power": 75,   "inputs": 4, "outputs": 2, "sloop_slots": 4},
+    "Packager":             {"power": 10,   "inputs": 2, "outputs": 2, "sloop_slots": 2},
+    "Particle Accelerator": {"power": 1000, "inputs": 3, "outputs": 1, "sloop_slots": 4},  # avg, varies
+    "Quantum Encoder":      {"power": 2000, "inputs": 4, "outputs": 2, "sloop_slots": 4},  # avg
+    "Converter":            {"power": 500,  "inputs": 2, "outputs": 1, "sloop_slots": 2},  # avg
+    "Crafting Bench":       {"power": 0,    "inputs": 4, "outputs": 1, "sloop_slots": 0},  # manual
+    "Equipment Workshop":   {"power": 0,    "inputs": 4, "outputs": 1, "sloop_slots": 0},  # manual
 }
 
 # Miner throughput (items/min) at 100% clock speed

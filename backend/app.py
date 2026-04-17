@@ -34,6 +34,8 @@ templates = Jinja2Templates(directory=str(BASE_DIR.parent / "frontend"))
 
 db = RecipeDB(RECIPES)
 MACHINE_POWER = {m: d["power"] for m, d in MACHINES.items()}
+SLOOP_SLOTS = {m: d.get("sloop_slots", 0) for m, d in MACHINES.items()}
+TOTAL_SOMERSLOOPS = 106
 
 
 # ----- Database -----
@@ -122,6 +124,22 @@ def init_db():
             UNIQUE(factory_id, product),
             FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS sloop_overrides (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            plan_id INTEGER NOT NULL,
+            product TEXT NOT NULL,
+            slooped INTEGER NOT NULL DEFAULT 1,
+            UNIQUE(plan_id, product),
+            FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS factory_sloop_overrides (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            factory_id INTEGER NOT NULL,
+            product TEXT NOT NULL,
+            slooped INTEGER NOT NULL DEFAULT 1,
+            UNIQUE(factory_id, product),
+            FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE
+        );
         """)
         # Create a default plan if none exists
         cur = conn.execute("SELECT COUNT(*) c FROM plans")
@@ -192,11 +210,16 @@ def load_plan_state(plan_id: int) -> dict:
             "SELECT * FROM power_plants WHERE plan_id=? ORDER BY id",
             (plan_id,)
         ).fetchall()
+        sloops = conn.execute(
+            "SELECT product, slooped FROM sloop_overrides WHERE plan_id=?",
+            (plan_id,)
+        ).fetchall()
     return {
         "plan": dict(plan) if plan else None,
         "targets": [dict(t) for t in targets],
         "choices": {c["product"]: c["recipe"] for c in choices},
         "clocks": {c["product"]: c["clock_pct"] for c in clocks},
+        "sloops": {s["product"]: bool(s["slooped"]) for s in sloops},
         "resources": [dict(r) for r in resources],
         "power_plants": [dict(pp) for pp in pplants],
     }
@@ -205,7 +228,7 @@ def load_plan_state(plan_id: int) -> dict:
 def compute_plan(plan_id: int) -> dict:
     state = load_plan_state(plan_id)
     targets = {t["product"]: t["rate_per_min"] for t in state["targets"]}
-    result = solve(targets, state["choices"], db, MACHINE_POWER, state.get("clocks", {}))
+    result = solve(targets, state["choices"], db, MACHINE_POWER, state.get("clocks", {}), state.get("sloops", {}), SLOOP_SLOTS)
 
     # Also compute a combined result that includes power plant fuel demand
     pp_fuel_targets = {}
@@ -223,7 +246,7 @@ def compute_plan(plan_id: int) -> dict:
     combined_targets = dict(targets)
     for fuel, rate in pp_fuel_targets.items():
         combined_targets[fuel] = combined_targets.get(fuel, 0) + rate
-    combined_result = solve(combined_targets, state["choices"], db, MACHINE_POWER, state.get("clocks", {}))
+    combined_result = solve(combined_targets, state["choices"], db, MACHINE_POWER, state.get("clocks", {}), state.get("sloops", {}), SLOOP_SLOTS)
 
     # Compute available raw resources
     available = {}
@@ -346,6 +369,8 @@ def home(request: Request):
         "all_products": sorted(db.producers.keys()),
         "choices_data": choices_data,
         "machines_info": MACHINES,
+        "sloop_slots": SLOOP_SLOTS,
+        "total_somersloops": TOTAL_SOMERSLOOPS,
         "factories": factories_list,
         "generators": GENERATORS,
         "pp_stats": data["pp_stats"],
@@ -442,6 +467,59 @@ def clear_choices(plan_id: int = Form(...)):
     with get_db() as conn:
         conn.execute("DELETE FROM recipe_choices WHERE plan_id=?", (plan_id,))
     return RedirectResponse("/#choices", status_code=303)
+
+
+@app.post("/api/sloops/toggle")
+def toggle_sloop(plan_id: int = Form(...), product: str = Form(...)):
+    """Toggle sloop override for a product on the active plan."""
+    with get_db() as conn:
+        existing = conn.execute(
+            "SELECT id, slooped FROM sloop_overrides WHERE plan_id=? AND product=?",
+            (plan_id, product)
+        ).fetchone()
+        if existing:
+            conn.execute("DELETE FROM sloop_overrides WHERE id=?", (existing["id"],))
+        else:
+            conn.execute(
+                "INSERT INTO sloop_overrides (plan_id, product, slooped) VALUES (?,?,1)",
+                (plan_id, product)
+            )
+    return RedirectResponse("/#chain", status_code=303)
+
+
+@app.post("/api/sloops/clear")
+def clear_sloops(plan_id: int = Form(...)):
+    """Clear all sloop overrides."""
+    with get_db() as conn:
+        conn.execute("DELETE FROM sloop_overrides WHERE plan_id=?", (plan_id,))
+    return RedirectResponse("/#chain", status_code=303)
+
+
+@app.post("/api/factories/{factory_id}/sloops/toggle")
+def toggle_factory_sloop(factory_id: int, product: str = Form(...)):
+    """Toggle sloop override for a product on a factory."""
+    with get_db() as conn:
+        existing = conn.execute(
+            "SELECT id FROM factory_sloop_overrides WHERE factory_id=? AND product=?",
+            (factory_id, product)
+        ).fetchone()
+        if existing:
+            conn.execute("DELETE FROM factory_sloop_overrides WHERE id=?", (existing["id"],))
+        else:
+            conn.execute(
+                "INSERT INTO factory_sloop_overrides (factory_id, product, slooped) VALUES (?,?,1)",
+                (factory_id, product)
+            )
+    return RedirectResponse(f"/factory/{factory_id}#chain", status_code=303)
+
+
+@app.post("/api/factories/{factory_id}/sloops/clear")
+def clear_factory_sloops(factory_id: int):
+    """Clear all sloop overrides for a factory."""
+    with get_db() as conn:
+        conn.execute("DELETE FROM factory_sloop_overrides WHERE factory_id=?", (factory_id,))
+    return RedirectResponse(f"/factory/{factory_id}#chain", status_code=303)
+
 
 
 @app.get("/api/recipe/{product}/options")
@@ -982,8 +1060,12 @@ def world_view(request: Request):
                 "SELECT product, recipe FROM factory_choices WHERE factory_id=?",
                 (f["id"],)
             ).fetchall()}
-            fresult = solve(ftargets, fchoices, db, MACHINE_POWER, plan_clocks)
-            factory_details.append({"name": f["name"], "power": fresult["total_power"], "targets": f["targets"]})
+            fsloops = {s["product"]: bool(s["slooped"]) for s in conn.execute(
+                "SELECT product, slooped FROM factory_sloop_overrides WHERE factory_id=?",
+                (f["id"],)
+            ).fetchall()}
+            fresult = solve(ftargets, fchoices, db, MACHINE_POWER, plan_clocks, fsloops, SLOOP_SLOTS)
+            factory_details.append({"name": f["name"], "power": fresult["total_power"], "targets": f["targets"], "products": fresult["products"]})
             world_power += fresult["total_power"]
             for raw, rate in fresult["raws"].items():
                 world_raws[raw] = world_raws.get(raw, 0) + rate
@@ -996,6 +1078,13 @@ def world_view(request: Request):
                         wp["machines_ceil"] = (wp["machines_ceil"] or 0) + p["machines_ceil"]
                 else:
                     world_products[p["name"]] = {**p}
+
+        # Compute total sloops used across all factories
+        total_sloops_used = sum(
+            p.get("sloops_used", 0)
+            for fd in factory_details
+            for p in fd.get("products", [])
+        )
 
         # Determine factory supply per fuel type and total PP demand per fuel type.
         # Factories already have their full chain solved above, so we only need to
@@ -1222,7 +1311,12 @@ def world_view(request: Request):
         "world_waste": world_waste,
         "waste_balance": waste_balance,
         "machines_info": MACHINES,
+        "sloop_slots": SLOOP_SLOTS,
+        "total_somersloops": TOTAL_SOMERSLOOPS,
         "hostname": HOSTNAME,
+        "total_sloops_used": total_sloops_used,
+        "total_somersloops": TOTAL_SOMERSLOOPS,
+        "sloop_slots": SLOOP_SLOTS,
     })
 
 
@@ -1251,6 +1345,13 @@ def factory_detail(request: Request, factory_id: int):
         ).fetchall()
         choices_dict = {c["product"]: c["recipe"] for c in fchoices}
 
+        # Load factory sloop overrides
+        fsloops = conn.execute(
+            "SELECT product, slooped FROM factory_sloop_overrides WHERE factory_id=?",
+            (factory_id,)
+        ).fetchall()
+        sloops_dict = {s["product"]: bool(s["slooped"]) for s in fsloops}
+
         # Load plan-level clocks and resources
         plan_clocks = {c["product"]: c["clock_pct"] for c in conn.execute(
             "SELECT product, clock_pct FROM clock_overrides WHERE plan_id=?", (plan_id,)
@@ -1262,7 +1363,7 @@ def factory_detail(request: Request, factory_id: int):
 
     # Solve
     targets = {t["product"]: t["rate_per_min"] for t in ftargets}
-    result = solve(targets, choices_dict, db, MACHINE_POWER, plan_clocks)
+    result = solve(targets, choices_dict, db, MACHINE_POWER, plan_clocks, sloops_dict, SLOOP_SLOTS)
 
     # Budget
     available = {}
@@ -1304,11 +1405,16 @@ def factory_detail(request: Request, factory_id: int):
         "factory": factory,
         "targets": [dict(t) for t in ftargets],
         "all_products": sorted(db.producers.keys()),
+        "sloops_dict": sloops_dict,
+        "total_somersloops": TOTAL_SOMERSLOOPS,
+        "sloop_slots": SLOOP_SLOTS,
         "result": result,
         "budget": budget,
         "choices_data": choices_data,
         "choices_dict": choices_dict,
         "machines_info": MACHINES,
+        "sloop_slots": SLOOP_SLOTS,
+        "total_somersloops": TOTAL_SOMERSLOOPS,
         "hostname": HOSTNAME,
     })
 
@@ -1434,6 +1540,8 @@ def powerplant_detail(request: Request, pp_id: int):
         "choices_data": choices_data,
         "choices_dict": choices_dict,
         "machines_info": MACHINES,
+        "sloop_slots": SLOOP_SLOTS,
+        "total_somersloops": TOTAL_SOMERSLOOPS,
         "generators": GENERATORS,
         "hostname": HOSTNAME,
     })

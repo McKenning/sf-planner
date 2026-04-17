@@ -184,9 +184,17 @@
 {% else %}
 
   <!-- Power summary -->
-  <div class="power-card">
-    <div class="label">World Total Power Demand</div>
-    <div class="value">{{ "{:,.0f}".format(total_power) }}<span class="unit">MW</span></div>
+  <div style="display: grid; grid-template-columns: 1fr auto; gap: 12px; margin-bottom: 16px;">
+    <div class="power-card">
+      <div class="label">World Total Power Demand</div>
+      <div class="value">{{ "{:,.0f}".format(total_power) }}<span class="unit">MW</span></div>
+    </div>
+    {% if total_sloops_used is defined and total_sloops_used > 0 %}
+    <div class="power-card" style="border-color: #a78bfa;">
+      <div class="label">Somersloops Used</div>
+      <div class="value" style="color: #a78bfa;">{{ total_sloops_used }}<span class="unit">/ {{ total_somersloops }}</span></div>
+    </div>
+    {% endif %}
   </div>
 
   <!-- Factory breakdown -->

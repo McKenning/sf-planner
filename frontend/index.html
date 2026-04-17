@@ -572,6 +572,15 @@
     font-size: 14px;
   }
 
+
+  /* Sloops */
+  .sloop-btn { background: none; border: 1px solid var(--border); color: var(--text-dim); padding: 1px 6px; border-radius: 3px; cursor: pointer; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; transition: all 0.15s; }
+  .sloop-btn:hover { border-color: #a78bfa; color: #a78bfa; background: rgba(167, 139, 250, 0.1); }
+  .sloop-btn.active { border-color: #a78bfa; color: #a78bfa; background: rgba(167, 139, 250, 0.15); box-shadow: 0 0 6px rgba(167, 139, 250, 0.3); }
+  .sloop-badge { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 2px; text-transform: uppercase; letter-spacing: 1px; margin-left: 6px; background: rgba(167, 139, 250, 0.15); color: #a78bfa; }
+  .sloop-budget { font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 6px 12px; background: var(--bg-deep); border: 1px solid var(--border); border-radius: 4px; display: inline-flex; align-items: center; gap: 8px; }
+  .sloop-budget .count { color: #a78bfa; font-weight: 700; }
+
   /* Responsive */
   @media (max-width: 1100px) {
     main { grid-template-columns: 1fr; }
@@ -892,6 +901,7 @@
               <th class="center">Machines</th>
               <th class="right">Clock</th>
               <th class="right">Power</th>
+              <th class="center">Sloop</th>
               <th class="center">Action</th>
             </tr>
           </thead>
@@ -900,13 +910,14 @@
             {% for p in result.products %}
               {% if p.is_raw and not ns.in_raws %}
                 {% set ns.in_raws = true %}
-                <tr class="section-row"><td colspan="8">// RAW RESOURCES //</td></tr>
+                <tr class="section-row"><td colspan="9">// RAW RESOURCES //</td></tr>
               {% endif %}
               <tr class="{{ 'target' if p.is_target else ('raw' if p.is_raw else '') }}">
                 <td class="product">
                   {{ p.name }}
                   {% if p.is_target %}<span class="alt-badge">TARGET</span>{% endif %}
                   {% if p.is_raw %}<span class="raw-badge">RAW</span>{% endif %}
+                  {% if p.get('is_slooped') %}<span class="sloop-badge">2×</span>{% endif %}
                 </td>
                 <td class="right">{{ "{:,.2f}".format(p.total_per_min) }}</td>
                 <td class="recipe-cell">{{ p.recipe or '—' }}</td>
@@ -925,6 +936,17 @@
                   {% else %}—{% endif %}
                 </td>
                 <td class="right">{{ "{:,.1f}".format(p.power_total) if p.power_total else '—' }}</td>
+                <td class="center">
+                  {% if p.machine and not p.is_raw and sloop_slots.get(p.machine, 0) > 0 %}
+                  <form method="post" action="/api/sloops/toggle" style="display:inline">
+                    <input type="hidden" name="plan_id" value="{{ plan_id }}">
+                    <input type="hidden" name="product" value="{{ p.name }}">
+                    <button type="submit" class="sloop-btn {{ 'active' if p.get('is_slooped') else '' }}" title="{{ sloop_slots[p.machine] }} slots × {{ p.machines_ceil }} machines = {{ sloop_slots[p.machine] * p.machines_ceil }} sloops">
+                      {% if p.get('is_slooped') %}{{ p.get('sloops_used', 0) }}⬡{% else %}⬡{% endif %}
+                    </button>
+                  </form>
+                  {% else %}—{% endif %}
+                </td>
                 <td class="center">
                   {% if not p.is_raw %}
                   <a href="#choices-{{ p.name|replace(' ', '-')|replace('(', '')|replace(')', '') }}" class="btn ghost" style="padding: 2px 8px; font-size: 10px; text-decoration: none;">Swap</a>
