@@ -253,6 +253,37 @@
   </div>
   {% endif %}
 
+  <!-- Sink -->
+  {% if sink_items is defined and sink_items %}
+  <div class="panel">
+    <div class="panel-header">
+      <h2>AWESOME Sink</h2>
+      <span class="meta" style="color: #a78bfa;">Surplus production</span>
+    </div>
+    <div class="panel-body">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
+        {% for product, info in sink_items.items() %}
+        <div style="background:var(--bg-deep); border:1px solid var(--border); border-left:3px solid #a78bfa; border-radius:6px; padding:12px 14px;">
+          <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">{{ product }}</div>
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+            <span style="font-size:12px; color:var(--text-dim);">Produced</span>
+            <span style="font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--text); font-weight:700;">{{ "{:,.1f}".format(info.produced) }}/min</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+            <span style="font-size:12px; color:var(--text-dim);">Burned</span>
+            <span style="font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--accent); font-weight:700;">-{{ "{:,.1f}".format(info.consumed) }}/min</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; padding-top:6px; border-top:1px solid var(--border);">
+            <span style="font-size:12px; font-weight:600;">Sunk</span>
+            <span style="font-family:'JetBrains Mono',monospace; font-size:14px; font-weight:700; color:#a78bfa;">{{ "{:,.1f}".format(info.sunk) }}/min</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Budget -->
   <div class="panel">
     <div class="panel-header">

@@ -754,11 +754,36 @@ def world_view(request: Request):
             "surplus": surplus, "utilization": util, "ok": surplus >= 0,
         })
 
+    # Calculate sink: factory production of fuel items vs PP consumption
+    # Factory targets that match PP fuel types represent intentional overproduction
+    pp_fuel_consumption = {}  # fuel_type -> total consumed/min by power plants
+    for ppd in pp_details:
+        fuel = ppd["fuel_type"]
+        pp_fuel_consumption[fuel] = pp_fuel_consumption.get(fuel, 0) + ppd["fuel_per_min"]
+
+    factory_fuel_production = {}  # product -> total targeted/min by factories
+    for f in factories_list:
+        for t in f["targets"]:
+            if t["product"] in pp_fuel_consumption:
+                factory_fuel_production[t["product"]] = factory_fuel_production.get(t["product"], 0) + t["rate_per_min"]
+
+    sink_items = {}
+    for product, produced in factory_fuel_production.items():
+        consumed = pp_fuel_consumption.get(product, 0)
+        surplus = produced - consumed
+        if surplus > 0.01:
+            sink_items[product] = {
+                "produced": produced,
+                "consumed": consumed,
+                "sunk": surplus,
+            }
+
     return templates.TemplateResponse("world.html", {
         "request": request,
         "factories": factories_list,
         "factory_details": factory_details,
         "pp_details": pp_details,
+        "sink_items": sink_items,
         "result": {"products": products_list, "total_power": world_power},
         "budget": budget,
         "total_power": world_power,
