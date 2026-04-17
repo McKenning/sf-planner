@@ -218,32 +218,36 @@
   </div>
 
   <!-- Waste balance -->
-  {% if world_waste is defined and world_waste %}
+  {% if waste_balance is defined and waste_balance %}
   <div class="panel">
     <div class="panel-header">
       <h2>Nuclear Waste Balance</h2>
     </div>
     <div class="panel-body">
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
-        {% for waste, produced in world_waste.items() %}
-        {% set consumed = world_waste_consumed.get(waste, 0) if world_waste_consumed is defined else 0 %}
-        {% set net = produced - consumed %}
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
+        {% for waste, wb in waste_balance.items() %}
         <div style="background:var(--bg-deep); border:1px solid var(--border); border-radius:6px; padding:12px 14px;">
           <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">{{ waste }}</div>
           <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-            <span style="font-size:12px; color:var(--text-dim);">Produced</span>
-            <span style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#fbbf24; font-weight:700;">+{{ "{:,.1f}".format(produced) }}/min</span>
+            <span style="font-size:12px; color:var(--text-dim);">Produced by generators</span>
+            <span style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#fbbf24; font-weight:700;">+{{ "{:,.1f}".format(wb.produced) }}/min</span>
           </div>
-          {% if consumed > 0 %}
+          {% if wb.consumed_by_pp_chains > 0 %}
           <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-            <span style="font-size:12px; color:var(--text-dim);">Consumed</span>
-            <span style="font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--accent); font-weight:700;">-{{ "{:,.1f}".format(consumed) }}/min</span>
+            <span style="font-size:12px; color:var(--text-dim);">Used by fuel chains</span>
+            <span style="font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--accent); font-weight:700;">-{{ "{:,.1f}".format(wb.consumed_by_pp_chains) }}/min</span>
+          </div>
+          {% endif %}
+          {% if wb.consumed_by_factories > 0 %}
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+            <span style="font-size:12px; color:var(--text-dim);">Used by factories</span>
+            <span style="font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--accent); font-weight:700;">-{{ "{:,.1f}".format(wb.consumed_by_factories) }}/min</span>
           </div>
           {% endif %}
           <div style="display:flex; justify-content:space-between; padding-top:6px; border-top:1px solid var(--border);">
-            <span style="font-size:12px; font-weight:600;">{{ 'Surplus' if net > 0 else ('Deficit' if net < 0 else 'Balanced') }}</span>
-            <span style="font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:700; color:{{ '#4ade80' if net >= 0 else '#ef4444' }};">
-              {{ "{:+,.1f}".format(net) }}/min
+            <span style="font-size:12px; font-weight:600;">{{ 'Surplus' if wb.net > 0 else ('Deficit' if wb.net < 0 else 'Balanced') }}</span>
+            <span style="font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:700; color:{{ '#4ade80' if wb.net >= 0 else '#ef4444' }};">
+              {{ "{:+,.1f}".format(wb.net) }}/min
             </span>
           </div>
         </div>
