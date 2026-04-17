@@ -262,24 +262,39 @@ def solve(targets: Dict[str, float],
         if p not in seen:
             order.append(p)
 
-    # Step 2: in topo order, propagate demand
-    for p in order:
-        if p in TREAT_AS_RAW:
-            continue
-        rec_name = choices.get(p) or db.default_recipe(p)
-        if not rec_name or rec_name not in db.recipes_by_name:
-            continue
-        rec = db.recipes_by_name[rec_name]
-        out_qty = next((q for o, q in rec["outputs"] if o == p), rec["outputs"][0][1])
-        cycles_per_min = 60.0 / rec["duration"]
-        out_per_min_100 = out_qty * cycles_per_min
-        # How many machines (fractional) needed
-        if out_per_min_100 <= 0:
-            continue
-        scale = needed[p] / out_per_min_100  # = "machines at 100%" needed (fractional)
-        for ing, ing_qty in rec["inputs"]:
-            ing_per_min = ing_qty * cycles_per_min * scale
-            needed[ing] += ing_per_min
+    # Step 2: propagate demand iteratively until stable.
+    # A single pass can't resolve cycles (e.g. Recycled Rubber <-> Recycled Plastic).
+    # We iterate until the total demand changes by less than 0.01%, max 50 iterations.
+    for _iteration in range(50):
+        prev_total = sum(needed.values())
+        added = defaultdict(float)
+        for p in order:
+            if p in TREAT_AS_RAW:
+                continue
+            rec_name = choices.get(p) or db.default_recipe(p)
+            if not rec_name or rec_name not in db.recipes_by_name:
+                continue
+            rec = db.recipes_by_name[rec_name]
+            out_qty = next((q for o, q in rec["outputs"] if o == p), rec["outputs"][0][1])
+            cycles_per_min = 60.0 / rec["duration"]
+            out_per_min_100 = out_qty * cycles_per_min
+            if out_per_min_100 <= 0:
+                continue
+            scale = needed[p] / out_per_min_100
+            for ing, ing_qty in rec["inputs"]:
+                ing_per_min = ing_qty * cycles_per_min * scale
+                added[ing] += ing_per_min
+        # Reset non-target demand and reapply
+        for p in order:
+            if p not in targets:
+                needed[p] = 0
+        for p, rate in targets.items():
+            needed[p] = rate
+        for ing, rate in added.items():
+            needed[ing] += rate
+        new_total = sum(needed.values())
+        if abs(new_total - prev_total) < prev_total * 0.0001:
+            break
 
     # Step 3: build output structures
     # Two-pass: first intermediates (in topo order), then raws (in topo order).
