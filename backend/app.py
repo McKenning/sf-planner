@@ -997,21 +997,37 @@ def world_view(request: Request):
                 else:
                     world_products[p["name"]] = {**p}
 
-        # Determine which products factories already produce
-        # (their full chain is already accounted for in factory solves above)
-        factory_target_products = set()
+        # Determine factory supply per fuel type and total PP demand per fuel type.
+        # Factories already have their full chain solved above, so we only need to
+        # solve the PP fuel chain for the DEFICIT (PP demand - factory supply).
+        factory_fuel_supply = {}  # product -> total rate produced by factories
         for f in factories_list:
             for t in f["targets"]:
-                factory_target_products.add(t["product"])
+                factory_fuel_supply[t["product"]] = factory_fuel_supply.get(t["product"], 0) + t["rate_per_min"]
 
-        # Solve each power plant individually
+        # First pass: compute total PP demand per fuel type
         pplants = conn.execute(
             "SELECT * FROM power_plants WHERE plan_id=? ORDER BY id", (plan_id,)
         ).fetchall()
+        pp_total_fuel_demand = {}  # fuel_type -> total demand across all PPs
+        for pp in pplants:
+            pp_d = dict(pp)
+            gen = GENERATORS.get(pp_d["generator_type"], {})
+            fuel_rate = gen.get("fuels", {}).get(pp_d["fuel_type"], 0)
+            clock = pp_d["clock_pct"] / 100.0
+            pp_total_fuel_demand[pp_d["fuel_type"]] = pp_total_fuel_demand.get(pp_d["fuel_type"], 0) + fuel_rate * pp_d["count"] * clock
+
+        # Compute deficit per fuel type (how much the PPs need beyond factory supply)
+        fuel_deficit = {}
+        for fuel, demand in pp_total_fuel_demand.items():
+            supply = factory_fuel_supply.get(fuel, 0)
+            fuel_deficit[fuel] = max(0, demand - supply)
+
         pp_total_gen = 0
         world_waste = {}  # produced by generators
         world_waste_consumed = {}  # consumed by fuel chains
         pp_details = []
+        fuel_deficit_solved = set()  # track which fuel deficits we've already solved
 
         for pp in pplants:
             pp = dict(pp)
@@ -1029,14 +1045,65 @@ def world_view(request: Request):
             for w, r in waste_rates.items():
                 world_waste[w] = world_waste.get(w, 0) + r * pp["count"] * clock
 
-            # Solve the fuel chain — but only if no factory already produces this fuel.
-            # If a factory targets this fuel type, its full production chain (including
-            # all upstream raw demands) is already counted in the factory solves above.
-            # The PP is just a consumer of the factory's output in that case.
-            fuel_from_factory = pp["fuel_type"] in factory_target_products
+            supply = factory_fuel_supply.get(pp["fuel_type"], 0)
+            deficit = fuel_deficit.get(pp["fuel_type"], 0)
+            has_factory_supply = supply > 0
 
-            if fuel_from_factory:
-                # Factory already handles the full chain; no independent solve needed
+            if has_factory_supply and deficit <= 0:
+                # Factory fully covers all PP demand for this fuel — no chain solve needed
+                pp_details.append({
+                    "id": pp["id"], "name": pp.get("name", ""),
+                    "generator_type": pp["generator_type"],
+                    "fuel_type": pp["fuel_type"],
+                    "count": pp["count"], "clock_pct": pp["clock_pct"],
+                    "mw_total": total_mw,
+                    "fuel_per_min": total_fuel,
+                    "chain_power": 0,
+                    "factory_sourced": True,
+                })
+            elif has_factory_supply and deficit > 0 and pp["fuel_type"] not in fuel_deficit_solved:
+                # Factory partially covers demand — solve only for the deficit, once
+                fuel_deficit_solved.add(pp["fuel_type"])
+                deficit_water = total_water * (deficit / total_fuel) if total_fuel > 0 else 0
+                # Scale water proportionally based on total demand ratio
+                total_demand = pp_total_fuel_demand[pp["fuel_type"]]
+                deficit_water = (water_rate * total_demand * (deficit / total_demand)) if total_demand > 0 else 0
+                # Actually: water scales with the deficit fuel amount, not per-PP
+                # Just compute water for the deficit amount of fuel
+                # water_rate is per generator at 100%, we need water for deficit fuel production
+                # Simpler: use the same ratio — if deficit is X fuel/min, water is proportional
+                pp_deficit_targets = {pp["fuel_type"]: deficit}
+                # Water is consumed by the PP itself, not the fuel chain
+                # Don't include water in the fuel chain solve
+                pp_result = solve(pp_deficit_targets, plan_choices, db, MACHINE_POWER, plan_clocks)
+
+                pp_details.append({
+                    "id": pp["id"], "name": pp.get("name", ""),
+                    "generator_type": pp["generator_type"],
+                    "fuel_type": pp["fuel_type"],
+                    "count": pp["count"], "clock_pct": pp["clock_pct"],
+                    "mw_total": total_mw,
+                    "fuel_per_min": total_fuel,
+                    "chain_power": pp_result["total_power"],
+                    "factory_sourced": False,
+                })
+
+                world_power += pp_result["total_power"]
+                for raw, rate in pp_result["raws"].items():
+                    world_raws[raw] = world_raws.get(raw, 0) + rate
+                    if raw in ("Uranium Waste", "Plutonium Waste"):
+                        world_waste_consumed[raw] = world_waste_consumed.get(raw, 0) + rate
+                for p in pp_result["products"]:
+                    if p["name"] in world_products:
+                        wp = world_products[p["name"]]
+                        wp["total_per_min"] += p["total_per_min"]
+                        wp["power_total"] += p["power_total"]
+                        if p["machines_ceil"]:
+                            wp["machines_ceil"] = (wp["machines_ceil"] or 0) + p["machines_ceil"]
+                    else:
+                        world_products[p["name"]] = {**p}
+            elif has_factory_supply:
+                # Deficit already solved by another PP iteration — just record this PP
                 pp_details.append({
                     "id": pp["id"], "name": pp.get("name", ""),
                     "generator_type": pp["generator_type"],
@@ -1048,6 +1115,7 @@ def world_view(request: Request):
                     "factory_sourced": True,
                 })
             else:
+                # No factory supply at all — full chain solve
                 pp_targets = {pp["fuel_type"]: total_fuel}
                 if total_water > 0:
                     pp_targets["Water"] = total_water
