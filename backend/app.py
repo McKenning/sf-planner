@@ -1156,25 +1156,16 @@ def world_view(request: Request):
     # and power plants produce it, the net demand is reduced.
     waste_balance = {}
     for waste_type, produced in world_waste.items():
-        consumed_by_chains = world_waste_consumed.get(waste_type, 0)
-        consumed_by_factories = world_raws.get(waste_type, 0) - world_waste_consumed.get(waste_type, 0)
-        total_consumed = consumed_by_chains + consumed_by_factories
+        total_consumed = world_raws.get(waste_type, 0)
         net = produced - total_consumed
         waste_balance[waste_type] = {
             "produced": produced,
-            "consumed_by_pp_chains": consumed_by_chains,
-            "consumed_by_factories": consumed_by_factories,
             "total_consumed": total_consumed,
             "net": net,
         }
         # Remove waste from world_raws since it's supplied by generators, not mined
         if waste_type in world_raws:
-            # If supply >= demand, no shortfall. If not, show deficit.
-            supplied = min(produced, consumed_by_factories + consumed_by_chains)
-            remaining_demand = max(0, (consumed_by_factories + consumed_by_chains) - produced)
-            # Don't show waste in the mining budget at all - it's not a mineable
-            if waste_type in world_raws:
-                del world_raws[waste_type]
+            del world_raws[waste_type]
 
     # Build budget from summed raws
     available = {}
@@ -1229,7 +1220,6 @@ def world_view(request: Request):
         "total_power": world_power,
         "pp_total_generation": pp_total_gen,
         "world_waste": world_waste,
-        "world_waste_consumed": world_waste_consumed,
         "waste_balance": waste_balance,
         "machines_info": MACHINES,
         "hostname": HOSTNAME,
