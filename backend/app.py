@@ -1026,7 +1026,7 @@ def world_view(request: Request):
     waste_balance = {}
     for waste_type, produced in world_waste.items():
         consumed_by_chains = world_waste_consumed.get(waste_type, 0)
-        consumed_by_factories = world_raws.get(waste_type, 0)
+        consumed_by_factories = world_raws.get(waste_type, 0) - world_waste_consumed.get(waste_type, 0)
         total_consumed = consumed_by_chains + consumed_by_factories
         net = produced - total_consumed
         waste_balance[waste_type] = {
