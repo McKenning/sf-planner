@@ -697,6 +697,7 @@
           <span class="factory-name" title="{{ f.name }}">{{ f.name }}</span>
           <span class="factory-meta">{{ f.targets|length }} targets</span>
           <div class="factory-actions">
+            <a href="/factory/{{ f.id }}" class="btn ghost" style="padding: 2px 6px; font-size: 10px; text-decoration: none;" title="View production chain">View</a>
             <form method="post" action="/api/factories/{{ f.id }}/load" style="display:inline">
               <button type="submit" class="ghost" style="padding: 2px 6px; font-size: 10px;" title="Load into planner">Load</button>
             </form>
@@ -806,7 +807,7 @@
 
     <!-- Power summary -->
     <div class="power-card">
-      <div class="label">Factory Power Demand</div>
+      <div class="label">Planner Power Demand</div>
       <div class="value">{{ "{:,.0f}".format(result.total_power) }}<span class="unit">MW</span></div>
       {% if pp_stats %}
       <div style="margin-top: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px;">

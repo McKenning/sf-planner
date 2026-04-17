@@ -773,6 +773,89 @@ def world_view(request: Request):
 
 
 
+
+@app.get("/factory/{factory_id}", response_class=HTMLResponse)
+def factory_detail(request: Request, factory_id: int):
+    """Show a saved factory with its full production chain."""
+    with get_db() as conn:
+        plan_id = get_active_plan_id(conn)
+        factory = conn.execute("SELECT * FROM factories WHERE id=?", (factory_id,)).fetchone()
+        if not factory:
+            return RedirectResponse("/", status_code=303)
+        factory = dict(factory)
+
+        # Load factory targets and choices
+        ftargets = conn.execute(
+            "SELECT product, rate_per_min FROM factory_targets WHERE factory_id=? ORDER BY id",
+            (factory_id,)
+        ).fetchall()
+        fchoices = conn.execute(
+            "SELECT product, recipe FROM factory_choices WHERE factory_id=?",
+            (factory_id,)
+        ).fetchall()
+        choices_dict = {c["product"]: c["recipe"] for c in fchoices}
+
+        # Load plan-level clocks and resources
+        plan_clocks = {c["product"]: c["clock_pct"] for c in conn.execute(
+            "SELECT product, clock_pct FROM clock_overrides WHERE plan_id=?", (plan_id,)
+        ).fetchall()}
+        resources = conn.execute(
+            "SELECT resource, pure, normal, impure, miner_tier FROM resources WHERE plan_id=? ORDER BY id",
+            (plan_id,)
+        ).fetchall()
+
+    # Solve
+    targets = {t["product"]: t["rate_per_min"] for t in ftargets}
+    result = solve(targets, choices_dict, db, MACHINE_POWER, plan_clocks)
+
+    # Budget
+    available = {}
+    for r in resources:
+        available[r["resource"]] = calculate_available(
+            r["resource"], r["pure"], r["normal"], r["impure"], r["miner_tier"]
+        )
+    budget = []
+    for raw in BUDGET_RAWS:
+        demand = result["raws"].get(raw, 0)
+        avail = available.get(raw, 0)
+        surplus = avail - demand
+        util = (demand / avail * 100) if avail > 0 else 0
+        budget.append({
+            "resource": raw, "demand": demand, "available": avail,
+            "surplus": surplus, "utilization": util, "ok": surplus >= 0,
+        })
+
+    # Choices data for recipe picker
+    choices_data = {}
+    for product in sorted(db.producers.keys()):
+        if product in TREAT_AS_RAW:
+            continue
+        opts = db.all_choices_for(product)
+        if len(opts) < 2:
+            continue
+        default = db.default_recipe(product)
+        choices_data[product] = {
+            "default": default,
+            "options": [
+                {"recipe": rn, "tier": ALT_TIERS.get(rn, ""), "is_alternate": rn.startswith("Alternate:")}
+                for rn in opts
+            ],
+        }
+
+    return templates.TemplateResponse("factory_detail.html", {
+        "request": request,
+        "plan_id": plan_id,
+        "factory": factory,
+        "targets": [dict(t) for t in ftargets],
+        "result": result,
+        "budget": budget,
+        "choices_data": choices_data,
+        "choices_dict": choices_dict,
+        "machines_info": MACHINES,
+        "hostname": HOSTNAME,
+    })
+
+
 @app.post("/api/clock/set/pp/{pp_id}")
 def set_clock_for_pp(pp_id: int, plan_id: int = Form(...), product: str = Form(...), clock_pct: float = Form(...)):
     """Set clock override and redirect back to power plant detail."""

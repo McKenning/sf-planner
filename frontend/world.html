@@ -199,7 +199,7 @@
       <div class="factories-grid">
         {% for f in factories %}
         <div class="factory-summary">
-          <div class="name">{{ f.name }}</div>
+          <div class="name"><a href="/factory/{{ f.id }}" style="color:var(--text); text-decoration:none;">{{ f.name }}</a></div>
           <div class="detail">
             {% for t in f.targets %}
             <div class="target-line">
