@@ -848,6 +848,39 @@ def delete_factory(factory_id: int):
         conn.execute("DELETE FROM factories WHERE id=?", (factory_id,))
     return RedirectResponse("/", status_code=303)
 
+@app.post("/api/factories/{factory_id}/targets/add")
+def add_factory_target(factory_id: int, product: str = Form(...), rate: float = Form(...)):
+    """Add a new target to a saved factory."""
+    with get_db() as conn:
+        factory = conn.execute("SELECT id FROM factories WHERE id=?", (factory_id,)).fetchone()
+        if not factory:
+            return RedirectResponse("/", status_code=303)
+        conn.execute(
+            "INSERT INTO factory_targets (factory_id, product, rate_per_min) VALUES (?,?,?)",
+            (factory_id, product.strip(), rate)
+        )
+    return RedirectResponse(f"/factory/{factory_id}", status_code=303)
+
+
+@app.post("/api/factories/{factory_id}/targets/{target_id}/update")
+def update_factory_target(factory_id: int, target_id: int, rate: float = Form(...)):
+    """Update the rate of a factory target."""
+    with get_db() as conn:
+        conn.execute("UPDATE factory_targets SET rate_per_min=? WHERE id=? AND factory_id=?",
+                     (rate, target_id, factory_id))
+    return RedirectResponse(f"/factory/{factory_id}", status_code=303)
+
+
+@app.post("/api/factories/{factory_id}/targets/{target_id}/delete")
+def delete_factory_target(factory_id: int, target_id: int):
+    """Remove a target from a saved factory."""
+    with get_db() as conn:
+        conn.execute("DELETE FROM factory_targets WHERE id=? AND factory_id=?",
+                     (target_id, factory_id))
+    return RedirectResponse(f"/factory/{factory_id}", status_code=303)
+
+
+
 
 @app.post("/api/factories/{factory_id}/load")
 def load_factory(factory_id: int):
@@ -1088,7 +1121,7 @@ def factory_detail(request: Request, factory_id: int):
 
         # Load factory targets and choices
         ftargets = conn.execute(
-            "SELECT product, rate_per_min FROM factory_targets WHERE factory_id=? ORDER BY id",
+            "SELECT id, product, rate_per_min FROM factory_targets WHERE factory_id=? ORDER BY id",
             (factory_id,)
         ).fetchall()
         fchoices = conn.execute(
@@ -1149,6 +1182,7 @@ def factory_detail(request: Request, factory_id: int):
         "plan_id": plan_id,
         "factory": factory,
         "targets": [dict(t) for t in ftargets],
+        "all_products": sorted(db.producers.keys()),
         "result": result,
         "budget": budget,
         "choices_data": choices_data,

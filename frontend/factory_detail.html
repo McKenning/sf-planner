@@ -75,6 +75,28 @@
   .target-pill { display: inline-block; background: var(--bg-deep); border: 1px solid var(--border); border-radius: 3px; padding: 4px 10px; margin: 2px 4px 2px 0; font-size: 12px; }
   .target-pill .rate { font-family: 'JetBrains Mono', monospace; color: var(--accent); font-weight: 700; margin-left: 6px; }
 
+
+  /* Editable targets */
+  .target-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+  .target-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--bg-deep); border: 1px solid var(--border); border-radius: 3px; }
+  .target-name { font-weight: 600; font-size: 13px; min-width: 200px; color: var(--text); }
+  .target-edit-form { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+  .target-del-form { display: flex; }
+  .rate-input { width: 100px; background: var(--bg-elev); border: 1px solid var(--border); color: var(--accent); font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; padding: 4px 8px; border-radius: 3px; text-align: right; }
+  .rate-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow); }
+  .rate-unit { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim); }
+  .btn-sm { background: none; border: 1px solid var(--border); color: var(--text-dim); padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 14px; line-height: 1; transition: all 0.15s; }
+  .btn-sm:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-save { color: var(--good); }
+  .btn-save:hover { border-color: var(--good); background: var(--good-bg); }
+  .btn-del { color: var(--bad); }
+  .btn-del:hover { border-color: var(--bad); background: var(--bad-bg); }
+  .btn-add { color: var(--accent); font-weight: 600; font-size: 12px; }
+  .btn-add:hover { background: var(--accent-glow); border-color: var(--accent); }
+  .target-add-form { display: flex; align-items: center; gap: 8px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .add-product-select { flex: 1; max-width: 300px; background: var(--bg-deep); border: 1px solid var(--border); color: var(--text); padding: 5px 8px; border-radius: 3px; font-size: 13px; font-family: 'Inter', sans-serif; }
+  .add-product-select:focus { outline: none; border-color: var(--accent); }
+
   .footer-meta { text-align: center; padding: 24px; font-size: 11px; color: var(--text-faint); font-family: 'JetBrains Mono', monospace; }
   .footer-meta .accent { color: var(--accent); }
 </style>
@@ -114,9 +136,30 @@
       <h2>Targets</h2>
     </div>
     <div class="panel-body">
-      {% for t in targets %}
-      <span class="target-pill">{{ t.product }}<span class="rate">{{ "{:,.1f}".format(t.rate_per_min) }}/min</span></span>
-      {% endfor %}
+      <div class="target-list">
+        {% for t in targets %}
+        <div class="target-row">
+          <span class="target-name">{{ t.product }}</span>
+          <form action="/api/factories/{{ factory.id }}/targets/{{ t.id }}/update" method="post" class="target-edit-form">
+            <input type="number" name="rate" value="{{ t.rate_per_min }}" step="0.01" min="0.01" class="rate-input">
+            <span class="rate-unit">/min</span>
+            <button type="submit" class="btn-sm btn-save" title="Save">&#10003;</button>
+          </form>
+          <form action="/api/factories/{{ factory.id }}/targets/{{ t.id }}/delete" method="post" class="target-del-form">
+            <button type="submit" class="btn-sm btn-del" title="Remove target">&times;</button>
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+      <form action="/api/factories/{{ factory.id }}/targets/add" method="post" class="target-add-form">
+        <select name="product" class="add-product-select">
+          {% for p in all_products %}
+          <option value="{{ p }}">{{ p }}</option>
+          {% endfor %}
+        </select>
+        <input type="number" name="rate" value="1" step="0.01" min="0.01" class="rate-input" placeholder="rate/min">
+        <button type="submit" class="btn-sm btn-add">+ Add</button>
+      </form>
     </div>
   </div>
 
