@@ -10,7 +10,11 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+from io import BytesIO
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, numbers
+from openpyxl.utils import get_column_letter
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -466,6 +470,253 @@ def export_plan():
         plan_id = get_active_plan_id(conn)
     state = load_plan_state(plan_id)
     return JSONResponse(state)
+
+@app.get("/api/plan/export/xlsx")
+def export_plan_xlsx():
+    """Export current plan as a formatted Excel workbook."""
+    with get_db() as conn:
+        plan_id = get_active_plan_id(conn)
+    data = compute_plan(plan_id)
+    state = data["state"]
+    result = data["result"]
+    budget = data["budget"]
+    pp_stats = data.get("pp_stats", [])
+    pp_total_gen = data.get("pp_total_generation", 0)
+
+    wb = Workbook()
+
+    # ── Styles ──
+    header_font = Font(name="Calibri", bold=True, size=11, color="FFFFFF")
+    header_fill = PatternFill(start_color="2B2D42", end_color="2B2D42", fill_type="solid")
+    subheader_fill = PatternFill(start_color="3A3D5C", end_color="3A3D5C", fill_type="solid")
+    target_fill = PatternFill(start_color="EDF7ED", end_color="EDF7ED", fill_type="solid")
+    raw_fill = PatternFill(start_color="FFF8E1", end_color="FFF8E1", fill_type="solid")
+    ok_fill = PatternFill(start_color="C8E6C9", end_color="C8E6C9", fill_type="solid")
+    warn_fill = PatternFill(start_color="FFCDD2", end_color="FFCDD2", fill_type="solid")
+    num_fmt_1 = "0.00"
+    num_fmt_pct = r"0.0\%"
+    thin_border = Border(
+        left=Side(style="thin", color="D0D0D0"),
+        right=Side(style="thin", color="D0D0D0"),
+        top=Side(style="thin", color="D0D0D0"),
+        bottom=Side(style="thin", color="D0D0D0"),
+    )
+
+    def style_header(ws, row, num_cols):
+        for col in range(1, num_cols + 1):
+            cell = ws.cell(row=row, column=col)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.border = thin_border
+
+    def style_data_cell(cell, fmt=None):
+        cell.border = thin_border
+        cell.alignment = Alignment(vertical="center")
+        if fmt:
+            cell.number_format = fmt
+
+    def auto_width(ws):
+        for col_cells in ws.columns:
+            max_len = 0
+            col_letter = get_column_letter(col_cells[0].column)
+            for cell in col_cells:
+                try:
+                    val = str(cell.value) if cell.value is not None else ""
+                    max_len = max(max_len, len(val))
+                except:
+                    pass
+            ws.column_dimensions[col_letter].width = min(max(max_len + 3, 10), 40)
+
+    # ═══════════════════════════════════════════
+    # Sheet 1: Production Chain
+    # ═══════════════════════════════════════════
+    ws = wb.active
+    ws.title = "Production Chain"
+    headers = ["Product", "Rate /min", "Recipe", "Machine", "# Machines", "Clock %", "Power (MW)", "Target?", "Raw?"]
+    ws.append(headers)
+    style_header(ws, 1, len(headers))
+
+    for p in result["products"]:
+        row = [
+            p["name"],
+            p["total_per_min"],
+            p.get("recipe") or "—",
+            p.get("machine") or "—",
+            p.get("machines_ceil") or "",
+            p.get("clock_pct"),
+            p.get("power_total", 0),
+            "Yes" if p.get("is_target") else "",
+            "Yes" if p.get("is_raw") else "",
+        ]
+        ws.append(row)
+        r = ws.max_row
+        for c in range(1, len(headers) + 1):
+            cell = ws.cell(row=r, column=c)
+            style_data_cell(cell)
+        # Format numbers
+        style_data_cell(ws.cell(row=r, column=2), num_fmt_1)
+        style_data_cell(ws.cell(row=r, column=6), num_fmt_1)
+        style_data_cell(ws.cell(row=r, column=7), num_fmt_1)
+        # Highlight targets and raws
+        if p.get("is_target"):
+            for c in range(1, len(headers) + 1):
+                ws.cell(row=r, column=c).fill = target_fill
+        elif p.get("is_raw"):
+            for c in range(1, len(headers) + 1):
+                ws.cell(row=r, column=c).fill = raw_fill
+
+    # Summary row
+    ws.append([])
+    ws.append(["Total Power (MW)", result.get("total_power", 0)])
+    style_data_cell(ws.cell(row=ws.max_row, column=1))
+    ws.cell(row=ws.max_row, column=1).font = Font(bold=True)
+    style_data_cell(ws.cell(row=ws.max_row, column=2), num_fmt_1)
+    auto_width(ws)
+
+    # ═══════════════════════════════════════════
+    # Sheet 2: Resource Budget
+    # ═══════════════════════════════════════════
+    ws2 = wb.create_sheet("Resource Budget")
+    headers2 = ["Resource", "Demand /min", "Available /min", "Surplus /min", "Utilization %", "Status"]
+    ws2.append(headers2)
+    style_header(ws2, 1, len(headers2))
+
+    for b in budget:
+        row = [
+            b["resource"],
+            b["demand"],
+            b["available"],
+            b["surplus"],
+            b["utilization"],
+            "OK" if b["ok"] else "OVER",
+        ]
+        ws2.append(row)
+        r = ws2.max_row
+        for c in range(1, len(headers2) + 1):
+            cell = ws2.cell(row=r, column=c)
+            style_data_cell(cell)
+        style_data_cell(ws2.cell(row=r, column=2), num_fmt_1)
+        style_data_cell(ws2.cell(row=r, column=3), num_fmt_1)
+        style_data_cell(ws2.cell(row=r, column=4), num_fmt_1)
+        style_data_cell(ws2.cell(row=r, column=5), num_fmt_pct)
+        status_cell = ws2.cell(row=r, column=6)
+        status_cell.fill = ok_fill if b["ok"] else warn_fill
+        status_cell.font = Font(bold=True, color="1B5E20" if b["ok"] else "B71C1C")
+    auto_width(ws2)
+
+    # ═══════════════════════════════════════════
+    # Sheet 3: Targets
+    # ═══════════════════════════════════════════
+    ws3 = wb.create_sheet("Targets")
+    headers3 = ["Product", "Rate /min"]
+    ws3.append(headers3)
+    style_header(ws3, 1, len(headers3))
+    for t in state["targets"]:
+        ws3.append([t["product"], t["rate_per_min"]])
+        r = ws3.max_row
+        style_data_cell(ws3.cell(row=r, column=1))
+        style_data_cell(ws3.cell(row=r, column=2), num_fmt_1)
+    auto_width(ws3)
+
+    # ═══════════════════════════════════════════
+    # Sheet 4: Recipe Choices
+    # ═══════════════════════════════════════════
+    ws4 = wb.create_sheet("Recipe Choices")
+    headers4 = ["Product", "Selected Recipe"]
+    ws4.append(headers4)
+    style_header(ws4, 1, len(headers4))
+    for product, recipe in sorted(state["choices"].items()):
+        ws4.append([product, recipe])
+        r = ws4.max_row
+        style_data_cell(ws4.cell(row=r, column=1))
+        style_data_cell(ws4.cell(row=r, column=2))
+    auto_width(ws4)
+
+    # ═══════════════════════════════════════════
+    # Sheet 5: Power Plants (if any)
+    # ═══════════════════════════════════════════
+    if pp_stats:
+        ws5 = wb.create_sheet("Power Plants")
+        headers5 = ["Name", "Generator", "Fuel", "Count", "Clock %", "MW Each", "MW Total", "Fuel /min", "Water /min"]
+        ws5.append(headers5)
+        style_header(ws5, 1, len(headers5))
+        for pp in pp_stats:
+            row = [
+                pp.get("name", ""),
+                pp["generator_type"],
+                pp["fuel_type"],
+                pp["count"],
+                pp["clock_pct"],
+                pp.get("mw_each", 0),
+                pp.get("mw_total", 0),
+                pp.get("fuel_per_min", 0),
+                pp.get("water_per_min", 0),
+            ]
+            ws5.append(row)
+            r = ws5.max_row
+            for c in range(1, len(headers5) + 1):
+                style_data_cell(ws5.cell(row=r, column=c))
+            style_data_cell(ws5.cell(row=r, column=5), num_fmt_1)
+            style_data_cell(ws5.cell(row=r, column=6), num_fmt_1)
+            style_data_cell(ws5.cell(row=r, column=7), num_fmt_1)
+            style_data_cell(ws5.cell(row=r, column=8), num_fmt_1)
+            style_data_cell(ws5.cell(row=r, column=9), num_fmt_1)
+        ws5.append([])
+        ws5.append(["Total Generation (MW)", "", "", "", "", "", pp_total_gen])
+        ws5.cell(row=ws5.max_row, column=1).font = Font(bold=True)
+        style_data_cell(ws5.cell(row=ws5.max_row, column=7), num_fmt_1)
+        auto_width(ws5)
+
+    # ═══════════════════════════════════════════
+    # Sheet 6: Clock Overrides (if any)
+    # ═══════════════════════════════════════════
+    if state.get("clocks"):
+        ws6 = wb.create_sheet("Clock Overrides")
+        headers6 = ["Product", "Clock %"]
+        ws6.append(headers6)
+        style_header(ws6, 1, len(headers6))
+        for product, pct in sorted(state["clocks"].items()):
+            ws6.append([product, pct])
+            r = ws6.max_row
+            style_data_cell(ws6.cell(row=r, column=1))
+            style_data_cell(ws6.cell(row=r, column=2), num_fmt_1)
+        auto_width(ws6)
+
+    # ═══════════════════════════════════════════
+    # Sheet 7: Resources (node allocations)
+    # ═══════════════════════════════════════════
+    if state.get("resources"):
+        ws7 = wb.create_sheet("Resource Nodes")
+        headers7 = ["Resource", "Pure", "Normal", "Impure", "Miner Tier"]
+        ws7.append(headers7)
+        style_header(ws7, 1, len(headers7))
+        for r_data in state["resources"]:
+            ws7.append([r_data["resource"], r_data["pure"], r_data["normal"], r_data["impure"], r_data["miner_tier"]])
+            r = ws7.max_row
+            for c in range(1, len(headers7) + 1):
+                style_data_cell(ws7.cell(row=r, column=c))
+        auto_width(ws7)
+
+    # Freeze top row on all sheets
+    for sheet in wb.worksheets:
+        sheet.freeze_panes = "A2"
+
+    # Write to buffer
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    plan_name = state["plan"]["name"] if state.get("plan") and state["plan"].get("name") else "plan"
+    safe_name = "".join(c for c in plan_name if c.isalnum() or c in " _-").strip().replace(" ", "_")
+    filename = f"sf-planner_{safe_name}.xlsx"
+
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
 
 
 
