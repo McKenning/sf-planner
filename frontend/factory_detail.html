@@ -97,6 +97,16 @@
   .add-product-select { flex: 1; max-width: 300px; background: var(--bg-deep); border: 1px solid var(--border); color: var(--text); padding: 5px 8px; border-radius: 3px; font-size: 13px; font-family: 'Inter', sans-serif; }
   .add-product-select:focus { outline: none; border-color: var(--accent); }
 
+  /* Recipe choices */
+  .choices-list { max-height: 600px; overflow-y: auto; }
+  .choice-row { display: grid; grid-template-columns: 1fr 1.5fr auto; gap: 8px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+  .choice-row .product-name { font-weight: 600; font-size: 13px; }
+  .choice-row select { background: var(--bg-deep); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; font-size: 12px; border-radius: 3px; font-family: 'Inter', sans-serif; }
+  .choice-row select:focus { outline: none; border-color: var(--accent); }
+  .choice-row .reset-btn { padding: 2px 8px; font-size: 10px; }
+  .ghost { background: none; border: 1px solid var(--border); color: var(--text-dim); padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; transition: all 0.15s; }
+  .ghost:hover { border-color: var(--accent); color: var(--accent); }
+
   .footer-meta { text-align: center; padding: 24px; font-size: 11px; color: var(--text-faint); font-family: 'JetBrains Mono', monospace; }
   .footer-meta .accent { color: var(--accent); }
 </style>
@@ -190,6 +200,54 @@
     </div>
   </div>
 
+
+  <!-- Recipe Choices -->
+  <div class="panel" id="choices">
+    <div class="panel-header">
+      <h2>Recipe Choices</h2>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span class="meta">{{ choices_dict|length }} overrides</span>
+        {% if choices_dict %}
+        <form method="post" action="/api/factories/{{ factory.id }}/choices/clear" style="display:inline" onsubmit="return confirm('Reset all recipe overrides to defaults?');">
+          <button type="submit" class="ghost" style="padding: 2px 8px; font-size: 10px;">Reset all</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    <div class="panel-body">
+      <details id="choices-details">
+        <summary>Show all products with multiple recipe options ({{ choices_data|length }} total)</summary>
+        <div class="choices-list" style="margin-top: 12px;">
+          {% for product, info in choices_data.items() %}
+            {% set product_anchor = product|replace(' ', '-')|replace('(', '')|replace(')', '') %}
+            <div class="choice-row" id="choices-{{ product_anchor }}">
+              <span class="product-name">{{ product }}</span>
+              <form method="post" action="/api/factories/{{ factory.id }}/choices/set" style="display: contents">
+                <input type="hidden" name="product" value="{{ product }}">
+                <select name="recipe" onchange="this.form.submit()">
+                  {% set current = choices_dict.get(product) %}
+                  {% for opt in info.options %}
+                    <option value="{{ opt.recipe }}" {% if (current and current == opt.recipe) or (not current and opt.recipe == info.default) %}selected{% endif %}>
+                      {% if opt.tier %}[{{ opt.tier }}] {% endif %}{{ opt.recipe }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </form>
+              {% if choices_dict.get(product) %}
+              <form method="post" action="/api/factories/{{ factory.id }}/choices/reset" style="display: inline">
+                <input type="hidden" name="product" value="{{ product }}">
+                <button type="submit" class="ghost reset-btn">Reset</button>
+              </form>
+              {% else %}
+              <span style="color: var(--text-faint); font-size: 10px;">default</span>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </details>
+    </div>
+  </div>
+
   <!-- Production Chain -->
   <div class="panel" id="chain">
     <div class="panel-header">
@@ -241,5 +299,23 @@
   FICSIT PLANNER · <span class="accent">v0.3</span> · running on {{ hostname }}
 </div>
 
+
+<script>
+  // Persist recipe choices details open/closed state across form submissions
+  const details = document.querySelector('#choices-details');
+  if (details) {
+    if (sessionStorage.getItem('factory-choices-open') === 'true') {
+      details.open = true;
+      // Scroll to hash target if present
+      if (location.hash.startsWith('#choices-')) {
+        const el = document.querySelector(location.hash);
+        if (el) el.scrollIntoView({ block: 'center' });
+      }
+    }
+    details.addEventListener('toggle', () => {
+      sessionStorage.setItem('factory-choices-open', details.open);
+    });
+  }
+</script>
 </body>
 </html>

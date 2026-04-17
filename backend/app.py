@@ -879,6 +879,44 @@ def delete_factory_target(factory_id: int, target_id: int):
                      (target_id, factory_id))
     return RedirectResponse(f"/factory/{factory_id}", status_code=303)
 
+@app.post("/api/factories/{factory_id}/choices/set")
+def set_factory_choice(factory_id: int, product: str = Form(...), recipe: str = Form(...)):
+    """Set a recipe choice for a saved factory."""
+    with get_db() as conn:
+        existing = conn.execute(
+            "SELECT id FROM factory_choices WHERE factory_id=? AND product=?",
+            (factory_id, product)
+        ).fetchone()
+        if existing:
+            conn.execute("UPDATE factory_choices SET recipe=? WHERE id=?", (recipe, existing["id"]))
+        else:
+            conn.execute(
+                "INSERT INTO factory_choices (factory_id, product, recipe) VALUES (?,?,?)",
+                (factory_id, product, recipe)
+            )
+    return RedirectResponse(f"/factory/{factory_id}#choices", status_code=303)
+
+
+@app.post("/api/factories/{factory_id}/choices/reset")
+def reset_factory_choice(factory_id: int, product: str = Form(...)):
+    """Reset a recipe choice for a saved factory back to default."""
+    with get_db() as conn:
+        conn.execute(
+            "DELETE FROM factory_choices WHERE factory_id=? AND product=?",
+            (factory_id, product)
+        )
+    return RedirectResponse(f"/factory/{factory_id}#choices", status_code=303)
+
+
+@app.post("/api/factories/{factory_id}/choices/clear")
+def clear_factory_choices(factory_id: int):
+    """Reset all recipe choices for a saved factory."""
+    with get_db() as conn:
+        conn.execute("DELETE FROM factory_choices WHERE factory_id=?", (factory_id,))
+    return RedirectResponse(f"/factory/{factory_id}#choices", status_code=303)
+
+
+
 
 
 
