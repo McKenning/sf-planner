@@ -271,9 +271,13 @@ def solve(targets: Dict[str, float],
     # Step 2: propagate demand iteratively until stable.
     # A single pass can't resolve cycles (e.g. Recycled Rubber <-> Recycled Plastic).
     # We iterate until the total demand changes by less than 0.01%, max 50 iterations.
+    #
+    # Byproduct credits: when a recipe for product P also co-produces product B,
+    # those byproducts reduce the demand for B elsewhere in the chain.
     for _iteration in range(50):
         prev_total = sum(needed.values())
-        added = defaultdict(float)
+        added = defaultdict(float)       # ingredient demand
+        byproducts = defaultdict(float)  # byproduct credits
         for p in order:
             if p in TREAT_AS_RAW:
                 continue
@@ -292,6 +296,12 @@ def solve(targets: Dict[str, float],
             for ing, ing_qty in rec["inputs"]:
                 ing_per_min = ing_qty * cycles_per_min * scale
                 added[ing] += ing_per_min
+            # Credit byproducts: other outputs of this recipe produced at this scale
+            for bp_item, bp_qty in rec["outputs"]:
+                if bp_item == p:
+                    continue  # skip the primary output
+                bp_per_min = bp_qty * cycles_per_min * scale * sloop_mult
+                byproducts[bp_item] += bp_per_min
         # Reset non-target demand and reapply
         for p in order:
             if p not in targets:
@@ -300,6 +310,10 @@ def solve(targets: Dict[str, float],
             needed[p] = rate
         for ing, rate in added.items():
             needed[ing] += rate
+        # Subtract byproduct credits from demand (floor at 0)
+        for bp, credit in byproducts.items():
+            if bp in needed and needed[bp] > 0:
+                needed[bp] = max(0, needed[bp] - credit)
         new_total = sum(needed.values())
         if abs(new_total - prev_total) < prev_total * 0.0001:
             break

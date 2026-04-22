@@ -1554,13 +1554,33 @@ def powerplant_detail(request: Request, pp_id: int):
     waste_rates = gen.get("waste", {}).get(pp["fuel_type"], {})
     waste_totals = {w: r * pp["count"] * clock for w, r in waste_rates.items()}
 
-    # Build targets from fuel demand
-    targets = {pp["fuel_type"]: total_fuel}
-    if total_water > 0:
-        targets["Water"] = total_water
+    # Check if any factory already supplies this fuel type
+    with get_db() as conn2:
+        all_factories = load_factories_summary(conn2)
+    factory_fuel_supply = 0
+    for f in all_factories:
+        for t in f["targets"]:
+            if t["product"] == pp["fuel_type"]:
+                factory_fuel_supply += t["rate_per_min"]
 
-    # Solve the production chain
-    result = solve(targets, choices_dict, db, MACHINE_POWER, clocks_dict)
+    # Only solve for the deficit not covered by factories
+    fuel_deficit = max(0, total_fuel - factory_fuel_supply)
+    factory_sourced = factory_fuel_supply > 0
+
+    if fuel_deficit > 0:
+        targets = {pp["fuel_type"]: fuel_deficit}
+        if total_water > 0:
+            # Scale water proportionally to the deficit
+            targets["Water"] = total_water * (fuel_deficit / total_fuel) if total_fuel > 0 else 0
+        result = solve(targets, choices_dict, db, MACHINE_POWER, clocks_dict)
+    elif factory_sourced:
+        # Factory fully covers fuel demand — no chain needed
+        result = {"products": [], "raws": {}, "total_power": 0, "warnings": []}
+    else:
+        targets = {pp["fuel_type"]: total_fuel}
+        if total_water > 0:
+            targets["Water"] = total_water
+        result = solve(targets, choices_dict, db, MACHINE_POWER, clocks_dict)
 
     # Compute resource budget
     available = {}
@@ -1617,6 +1637,9 @@ def powerplant_detail(request: Request, pp_id: int):
         "total_somersloops": TOTAL_SOMERSLOOPS,
         "generators": GENERATORS,
         "hostname": HOSTNAME,
+        "factory_sourced": factory_sourced,
+        "factory_fuel_supply": factory_fuel_supply,
+        "fuel_deficit": fuel_deficit,
     })
 
 

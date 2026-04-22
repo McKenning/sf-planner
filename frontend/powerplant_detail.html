@@ -137,10 +137,20 @@
     <div class="stat-card fuel">
       <div class="label">{{ pp.fuel_type }}</div>
       <div class="value">{{ "{:,.1f}".format(pp.fuel_per_min) }}<span class="unit">/min</span></div>
+      {% if factory_sourced %}
+      <div class="unit" style="color:var(--good); font-family:'JetBrains Mono',monospace; font-size:10px; margin-top:4px;">
+        {% if fuel_deficit <= 0 %}Factory covers 100%{% else %}Factory: {{ "{:,.1f}".format(factory_fuel_supply) }}, deficit: {{ "{:,.1f}".format(fuel_deficit) }}{% endif %}
+      </div>
+      {% endif %}
     </div>
     <div class="stat-card consumption">
       <div class="label">Chain Power Cost</div>
       <div class="value">{{ "{:,.0f}".format(result.total_power) }}<span class="unit">MW</span></div>
+      {% if factory_sourced and fuel_deficit <= 0 %}
+      <div class="unit" style="color:var(--good); font-family:'JetBrains Mono',monospace; font-size:10px; margin-top:4px;">Factory-sourced</div>
+      {% elif factory_sourced %}
+      <div class="unit" style="color:var(--warn); font-family:'JetBrains Mono',monospace; font-size:10px; margin-top:4px;">Deficit chain only</div>
+      {% endif %}
     </div>
     {% if pp.waste %}
     <div class="stat-card" style="border-color: var(--warn);">
