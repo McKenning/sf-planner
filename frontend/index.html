@@ -515,6 +515,24 @@
     border-top: 1px solid var(--border);
   }
   .save-factory-form input[type=text] { flex: 1; }
+  .new-factory-form {
+    display: none;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    padding: 10px;
+    margin-bottom: 10px;
+    background: var(--bg-elev2);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+  }
+  .new-factory-form.open { display: flex; }
+  .new-factory-form input[type=text] { flex: 1; min-width: 180px; }
+  .new-factory-form .hint {
+    flex-basis: 100%;
+    font-size: 11px;
+    color: var(--text-faint);
+  }
 
 
   /* Power plants */
@@ -698,8 +716,21 @@
       <div class="panel-header">
         <h2>Factories</h2>
         <span class="meta">{{ factories|length }} saved</span>
+        <button type="button" class="btn" id="new-factory-btn"
+                onclick="document.getElementById('new-factory-form').classList.toggle('open'); document.querySelector('#new-factory-form input[name=factory_name]').focus();"
+                style="margin-left: auto; padding: 4px 10px; font-size: 11px;"
+                title="Start a new empty factory (clears the planner)">+ New Factory</button>
       </div>
       <div class="panel-body">
+
+        <!-- New Factory form: hidden by default, opens when "+ New Factory" is clicked -->
+        <form id="new-factory-form" class="new-factory-form" method="post" action="/api/factories/new"
+              onsubmit="return confirmNewFactory();">
+          <input type="text" name="factory_name" placeholder="New factory name…" required maxlength="64">
+          <button type="submit">Create &amp; Clear Planner</button>
+          <span class="hint">Creates an empty factory and clears the planner above so you can build it from scratch.</span>
+        </form>
+
         {% if factories %}
         {% for f in factories %}
         <div class="factory-card">
@@ -719,16 +750,27 @@
         {% endfor %}
         {% else %}
         <div style="color: var(--text-faint); font-size: 12px; padding: 8px 0;">
-          No factories saved yet. Build a plan above, then save it as a factory.
+          No factories saved yet. Click <b>+ New Factory</b> above to start one, or build a plan and use <i>Save current plan as factory</i> below.
         </div>
         {% endif %}
+
         <form class="save-factory-form" method="post" action="/api/factories/save">
           <input type="hidden" name="plan_id" value="{{ plan_id }}">
-          <input type="text" name="factory_name" placeholder="Factory name…" required>
-          <button type="submit" {% if not state.targets %}disabled title="Add targets first"{% endif %}>Save</button>
+          <input type="text" name="factory_name" placeholder="Save current plan as factory…" required maxlength="64">
+          <button type="submit" {% if not state.targets %}disabled title="Add targets first"{% endif %}>Save Snapshot</button>
         </form>
       </div>
     </div>
+
+    <script>
+      function confirmNewFactory() {
+        {% if state.targets %}
+        return confirm("Starting a new factory will clear the current planner ({{ state.targets|length }} target(s), recipe choices, sloops, and power plants). Continue?");
+        {% else %}
+        return true;
+        {% endif %}
+      }
+    </script>
 
     <!-- Power Plants panel -->
     <div class="panel" id="power" style="margin-top: 16px;">

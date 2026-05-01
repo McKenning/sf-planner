@@ -972,6 +972,32 @@ def save_factory(plan_id: int = Form(...), factory_name: str = Form(...)):
     return RedirectResponse("/", status_code=303)
 
 
+@app.post("/api/factories/new")
+def new_factory(factory_name: str = Form(...)):
+    """Create an empty factory and clear the active plan so the user starts fresh.
+
+    Distinct from /api/factories/save (which snapshots the current plan).
+    Use this when starting a new factory from scratch.
+    """
+    name = factory_name.strip()
+    if not name:
+        return RedirectResponse("/", status_code=303)
+    with get_db() as conn:
+        existing = conn.execute("SELECT id FROM factories WHERE name=?", (name,)).fetchone()
+        if existing:
+            return RedirectResponse("/?error=duplicate_factory_name", status_code=303)
+
+        plan_id = get_active_plan_id(conn)
+        conn.execute("DELETE FROM targets WHERE plan_id=?", (plan_id,))
+        conn.execute("DELETE FROM recipe_choices WHERE plan_id=?", (plan_id,))
+        conn.execute("DELETE FROM sloop_overrides WHERE plan_id=?", (plan_id,))
+        conn.execute("DELETE FROM clock_overrides WHERE plan_id=?", (plan_id,))
+        conn.execute("DELETE FROM power_plants WHERE plan_id=?", (plan_id,))
+
+        conn.execute("INSERT INTO factories (name) VALUES (?)", (name,))
+    return RedirectResponse("/", status_code=303)
+
+
 @app.post("/api/factories/{factory_id}/delete")
 def delete_factory(factory_id: int):
     with get_db() as conn:
