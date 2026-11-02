@@ -58,9 +58,7 @@ class Client:
         return json.loads(body)
 
 
-@pytest.fixture(scope="session")
-def server(tmp_path_factory):
-    d = tmp_path_factory.mktemp("qa-data")
+def _start(d):
     s = socket.socket()
     s.bind(("127.0.0.1", 0))
     port = s.getsockname()[1]
@@ -80,8 +78,27 @@ def server(tmp_path_factory):
     else:
         p.kill()
         raise RuntimeError("server did not start")
-    yield Client(base)
+    return p, Client(base)
+
+
+def _stop(p, d):
     p.terminate()
     p.wait(10)
     txt = (d / "server.log").read_text()
     assert "Traceback" not in txt.replace("HTTPException", ""), txt[-3000:]
+
+
+@pytest.fixture(scope="session")
+def server(tmp_path_factory):
+    d = tmp_path_factory.mktemp("qa-data")
+    p, c = _start(d)
+    yield c
+    _stop(p, d)
+
+
+@pytest.fixture()
+def fresh_server(tmp_path):
+    """A brand-new empty data directory (no world, no factories)."""
+    p, c = _start(tmp_path)
+    yield c
+    _stop(p, tmp_path)

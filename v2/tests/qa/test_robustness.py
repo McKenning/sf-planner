@@ -118,3 +118,35 @@ def test_archive_restore_rename_and_read_only(server):
     assert server.post(f"/factory/{fid}/output", {"item": "Iron Plate", "rate": "5"})[0] == 303
     assert server.post("/factory/99999/archive")[0] == 404
     assert server.post("/api/factories", {"name": "y" * 500})[0] == 400
+
+
+PAGES = ["/", "/goals", "/factories", "/flows", "/power", "/resources", "/import", "/health", "/api/search?q=iron",
+         "/api/search", "/item/Desc_IronPlate_C", "/recipe/Recipe_IronPlate_C"]
+
+
+def test_empty_world_every_page_works(fresh_server):
+    for path in PAGES:
+        assert fresh_server.get(path)[0] == 200, path
+    # first write on an empty DB creates the world implicitly
+    assert fresh_server.post("/goals/power", {"mw": "100"})[0] == 303
+    assert fresh_server.get("/goals")[0] == 200
+
+
+def test_world_with_one_empty_factory(fresh_server):
+    fid = fresh_server.new_factory("empty")
+    for path in PAGES + [f"/factory/{fid}", f"/api/factory/{fid}/export.json", f"/api/factory/{fid}/export.xlsx",
+                         f"/api/factory/{fid}/solve"]:
+        assert fresh_server.get(path)[0] == 200, path
+
+
+def test_double_submit_is_idempotent(fresh_server):
+    import threading
+    fid = fresh_server.new_factory("dbl")
+    codes = []
+    def go():
+        codes.append(fresh_server.post(f"/factory/{fid}/output", {"item": "Iron Plate", "rate": "60"})[0])
+    ts = [threading.Thread(target=go) for _ in range(12)]
+    [t.start() for t in ts]
+    [t.join() for t in ts]
+    assert set(codes) == {303}, codes
+    assert fresh_server.export(fid)["outputs"] == [{"item": "Iron Plate", "per_min": 60.0}]
