@@ -10,7 +10,8 @@ from fastapi import FastAPI, Request
 from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from fastapi.responses import HTMLResponse
+from urllib.parse import urlparse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -62,6 +63,20 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="SF Planner 2.0", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def same_origin_writes(request: Request, call_next):
+    """No login here, so a page on another site must not be able to make the visitor's browser POST to this app
+    (CSRF). Browsers send Origin on cross-site form posts; reject when it names a different host. Requests
+    without Origin (curl, scripts, same-origin GETs) are unaffected."""
+    if request.method not in ("GET", "HEAD", "OPTIONS"):
+        origin = request.headers.get("origin")
+        if origin and origin != "null" and urlparse(origin).netloc != request.headers.get("host", ""):
+            return JSONResponse({"detail": "Cross-site request refused"}, status_code=403)
+        if origin == "null":
+            return JSONResponse({"detail": "Cross-site request refused"}, status_code=403)
+    return await call_next(request)
 
 
 def _wants_html(request: Request) -> bool:

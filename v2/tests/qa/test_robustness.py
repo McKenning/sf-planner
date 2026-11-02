@@ -150,3 +150,22 @@ def test_double_submit_is_idempotent(fresh_server):
     [t.join() for t in ts]
     assert set(codes) == {303}, codes
     assert fresh_server.export(fid)["outputs"] == [{"item": "Iron Plate", "per_min": 60.0}]
+
+
+def test_cross_site_posts_are_refused(server):
+    import urllib.request, urllib.parse, urllib.error
+    def post(origin):
+        h = {"Origin": origin} if origin else {}
+        r = urllib.request.Request(server.base + "/goals/power", data=b"mw=5", headers=h, method="POST")
+        class N(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *a, **k):
+                return None
+        try:
+            return urllib.request.build_opener(N).open(r).status
+        except urllib.error.HTTPError as e:
+            return e.code
+    host = server.base.split("//")[1]
+    assert post("http://evil.example") == 403
+    assert post("null") == 403
+    assert post("http://" + host) == 303          # same origin (what a browser sends from our own pages)
+    assert post(None) == 303                      # curl / scripts
