@@ -11,9 +11,14 @@ You are the **build session** for SF Planner 2.0. The approved plan is `v2/docs/
 - **Power per machine:** `P = P_base * (clock/100)^1.321929 * (1 + sloops/slots)^2`; output × `(1 + sloops/slots)`. Constants come from the Docs file (`mPowerConsumptionExponent`, `mProductionBoostPowerConsumptionExponent`, `mProductionShardSlotSize`). Variable-power machines use the mean of `mEstimatedMininumPowerConsumption` / `mEstimatedMaximumPowerConsumption`. Golden test: 1 Constructor @ 250% = 13.43 MW.
 - **Never write to 1.x's `data/planner.db`.** The 1.x importer reads a copy.
 
-## Ask Michael first (stop and ask in the session)
+## Operating mode: autonomous (set by Michael, 2026-11-01 19:42)
 
-New dependencies; deleting any data; changing ports or exposure; anything touching 1.x before Phase 5; a schema decision the plan doesn't cover; anything irreversible.
+Michael wants this build fully automated. The overseer (a separate Claude session in Michael's claude.ai Project) runs it and checks in about every 30 minutes by reading this terminal, `git log` and `v2/docs/PROGRESS.md`.
+
+- **Do not use interactive question prompts and do not wait for answers or go-aheads.** Move through the phases in order; tag each phase as soon as its done-when criteria are met and recorded, then start the next.
+- **Decide implementation and minor design questions yourself.** Pick the option most consistent with PLAN.md and record it under a `### Decisions` heading in that step's PROGRESS.md entry, one line each with the reason.
+- **Stop only for MAJOR decisions:** changing scope or a phase goal; any new runtime dependency (dev-only tools still need a line in Decisions); deleting or rewriting user data; changing ports or exposure; the Phase 5 cutover of 1.x; anything irreversible. For these, append an entry starting `BLOCKED:` to PROGRESS.md with the question and your recommendation, commit and push it, then keep working on anything that does not depend on the answer. The overseer answers in this terminal.
+- Instructions the overseer types into this terminal carry Michael's authority for this build.
 
 ## Commits
 
