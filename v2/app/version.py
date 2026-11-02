@@ -1,4 +1,4 @@
 """What /health reports. Update with each phase tag."""
-TAG = "v2-p4"                      # last tagged phase
-VERSION = "2.0-p4"
-STATE = "phases 1-4 complete, phase 5 polish deployed, cutover to :8042 pending approval"
+TAG = "v2-p5"                      # last tagged phase
+VERSION = "2.0-p5"
+STATE = "all phases complete; 2.0 serves :8042; 1.x retired to legacy/ (tag v1-final)"
