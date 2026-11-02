@@ -60,3 +60,10 @@ Newest entries at the bottom. One entry per step: date/time (MT), what changed, 
 - Parity compares against 1.x with tightened tolerance as the pass criterion and lists the stock-1.x deltas with their cause — comparing to an under-converged answer would pin a 1.x defect.
 - Plan-level 1.x clock overrides merged into every factory on import (matches 1.x's factory view); backfill is fill-only and one-shot.
 - Raw = raw resources plus anything no planner recipe makes (leaves, slugs, alien protein, power shards) — covers 1.x's TREAT_AS_RAW without a hand-typed list.
+
+### Phase 2, step 1 deploy note
+
+- Deployed `4cc0c88` via pull + restart; `/health`, `/`, `/factories`, `/power` 200. The startup backfill ran once on docker02 (`backfilled: 56`).
+- **Open: `ssh docker02-deploy backup` failed ("mkdir: Permission denied")** and my deploy chain did not stop on it (pipe to `tail`), so that restart ran without a dated backup. Impact is nil here (the DB held only the re-creatable 1.x import and the backfill is fill-only; 1.x remains the source), but the backup command needs fixing on docker02 (the forced-command user cannot create the backup directory) before users edit data in 2.0. I will check the exit status of `backup` from now on and stop deploying migrations/data changes if it fails.
+
+BLOCKED: `docker02-deploy backup` fails with "mkdir: Permission denied" — needs an overseer/Michael fix on docker02 (permissions on the backup dir used by /usr/local/bin/sf-deploy). Not blocking code work; the app also writes its own `planner2.pre-migration-*.db` copies before schema migrations. Phase 2 UI will start letting users edit data, so please fix before the Phase 2 tag. Recommendation: create the dir owned by the deploy user, or point backups into `/opt/sf-planner/v2/data/backups/`.
