@@ -33,3 +33,11 @@ Newest entries at the bottom. One entry per step: date/time (MT), what changed, 
 - Open: (1) Smelter/Packager 0 sloop slots per Docs (see step 1). (2) Dev runs Python 3.14, image is 3.12 — the container ran the same code fine. (3) The importer maps a sloop override's slot count from the override recipe, else the first non-alternate recipe producing the item. (4) Compose mounts code read-write from the repo checkout, so `restart` picks up code changes (same pattern as 1.x). (5) Not done: Playwright browser check — no UI beyond static lists yet; I checked HTTP responses and rendered HTML only.
 
 **Phase 1 done-when:** pytest passes incl. golden ✔; recipe count matches Docs ✔; all 1.x factories and power plants appear in 2.0 ✔. Phase 1 is ready for overseer review.
+
+## 2026-11-01 — Phase 1 fix: sloop slots derived, 3.12 test step
+
+- Per Michael: Smelter has 1 Somersloop slot in game; Packager 0 is right. The Docs' `mProductionShardSlotSize` is unreliable, so `build_gamedata.py` now derives slots = `round(1 / mProductionShardBoostMultiplier)` if `mCanChangeProductionBoost` is True, else 0. Regenerated `gamedata.json`: the only change is Smelter 0 → 1 (all others already matched: Constructor 1; Assembler/Foundry/Refinery/Converter 2; Manufacturer/Blender/Particle Accelerator/Quantum Encoder 4; Packager 0).
+- Added `test_pinned_sloop_slots` (pins all 11).
+- Added `v2/tools/test312.sh`: runs pytest in `python:3.12-slim` (repo read-only, `~/sf-inputs` mounted so nothing is skipped). **Run before every deploy.** Result now: 17 passed on 3.12.16 (also 17 on 3.14 locally).
+- 1.x re-import: a fresh import into a clean DB gives identical results to before (183 override rows; only sloop override is Ficsite Trigon = 1, a Constructor item). No 1.x item with a sloop override is a Smelter item, so no stored values change. The importer is idempotent, so re-running it on docker02's existing DB is a no-op by design; I did not delete docker02 data.
+- Deployed via pull + restart; see verification below.

@@ -8375,7 +8375,7 @@
    "power_max_mw": 4.0,
    "clock_exponent": 1.321929,
    "sloop_power_exponent": 2.0,
-   "sloop_slots": 0,
+   "sloop_slots": 1,
    "sloop_boost_per_slot": 1.0,
    "min_clock": 0.01,
    "max_clock": 1.0

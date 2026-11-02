@@ -50,3 +50,10 @@ def test_variable_power_is_mean():
 def test_too_many_sloops():
     with pytest.raises(ValueError):
         machine_power_mw(b("Constructor"), 100, 2)
+
+
+def test_pinned_sloop_slots():
+    expected = {"Smelter": 1, "Constructor": 1, "Assembler": 2, "Foundry": 2, "Refinery": 2,
+                "Converter": 2, "Manufacturer": 4, "Blender": 4, "Particle Accelerator": 4,
+                "Quantum Encoder": 4, "Packager": 0}
+    assert {x["name"]: x["sloop_slots"] for x in gd.buildings().values()} == expected

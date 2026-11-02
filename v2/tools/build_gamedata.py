@@ -25,6 +25,15 @@ def f(c, k, default=0.0):
         return default
 
 
+def sloop_slots(c):
+    """Somersloop slots. The Docs' mProductionShardSlotSize is unreliable (Smelter reports 0 but has
+    1 slot in game), so derive: round(1 / boost-per-slot) if production boost is allowed, else 0."""
+    mult = f(c, "mProductionShardBoostMultiplier")
+    if c.get("mCanChangeProductionBoost") != "True" or mult <= 0:
+        return 0
+    return round(1 / mult)
+
+
 def load(src):
     raw = json.load(open(src, encoding="utf-16"))
     return {e["NativeClass"].split(".")[-1].rstrip("'"): e["Classes"] for e in raw}
@@ -83,7 +92,7 @@ def build(src):
                 "power_max_mw": pmax,
                 "clock_exponent": f(c, "mPowerConsumptionExponent"),
                 "sloop_power_exponent": f(c, "mProductionBoostPowerConsumptionExponent"),
-                "sloop_slots": int(f(c, "mProductionShardSlotSize")),
+                "sloop_slots": sloop_slots(c),
                 "sloop_boost_per_slot": f(c, "mProductionShardBoostMultiplier"),
                 "min_clock": f(c, "mMinPotential"),
                 "max_clock": f(c, "mMaxPotential"),
