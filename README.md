@@ -110,4 +110,5 @@ The world view solves each factory and power plant independently, then aggregate
 Fresh rewrite for Satisfactory 1.1, built beside 1.x (which is untouched and still on :8042). Plan: `v2/docs/PLAN.md`; build log: `v2/docs/PROGRESS.md`.
 
 - Phase 1 (done): game data generated from the game's Docs file (`v2/tools/build_gamedata.py` → `v2/core/gamedata.json`), 1.1 power maths (`v2/core/power.py`), SQLite migrations, 1.x importer, read-only World/Factories/Power pages.
+- Phase 2 (done): solver with byproducts and loops (`v2/core/solver.py`), factory page with inline recipe/clock/Somersloop edits and a recipe comparison, Excel/JSON export; every imported 1.x factory matches 1.x's solver (power differs by design). Parity report: `v2/docs/PARITY-1x-*.md`.
 - Runs as container `sf-planner-v2` on host port 8043 (`v2/docker-compose.yml`). Dev: `cd v2 && python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt && .venv/bin/pytest`, then `uvicorn app.main:app --port 8043`.

@@ -82,3 +82,9 @@ BLOCKED: `docker02-deploy backup` fails with "mkdir: Permission denied" — need
 - Override form applies clock + sloops together; picking a recipe from the comparison keeps the clock but clears sloops (slot counts differ per machine).
 - Recipe comparison is per-step at 100 % clock and ignores sub-ingredient chains (deeper comparison can use the solver later) — keeps the picker instant.
 - Factories are not deletable in the UI yet (deleting data is a major-decision area); archived factories are read-only.
+
+## 2026-11-01 — Phase 2 complete (`v2-p2`)
+
+**Done-when:** every imported 1.x factory solves with the same rates as 1.x; only power differs; differences listed — ✔ (see "Phase 2, step 1" for the full list and causes; `docs/PARITY-1x-stock.md`, `docs/PARITY-1x-tight.md`). Deployed at `8e42ce3`; all 2.0 pages and exports 200 on :8043. Root README updated. Ready for overseer review.
+
+Still open: `docker02-deploy backup` fails (BLOCKED entry above); not part of Phase 2's done-when, so the tag proceeds, but it must be fixed before Phase 3 adds migrations to the live DB. Phase 3 migrations will be deployed only after a successful `backup`; until then Phase 3 work continues on sfdev1 and is pushed but not deployed if it needs a migration.
