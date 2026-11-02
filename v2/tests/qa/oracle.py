@@ -234,7 +234,7 @@ def generator(gen_class: str, fuel_name: str, count: int, clock_pct: float, wast
     g = D["machines"][gen_class]
     fuel = item(fuel_name)
     mw = g["gen_mw"] * count * clock_pct / 100
-    fpm = mw / D["items"][fuel]["energy"] * 60
+    fpm = mw / (D["items"][fuel]["energy"] * unit(fuel)) * 60  # Docs: fluid energy is MJ per litre
     return {"mw": mw, "fuel_per_min": fpm, "water_m3_per_min": mw * g["water_ratio"] * 60 / 1000,
             "waste_per_min": fpm * waste_per_fuel}
 
