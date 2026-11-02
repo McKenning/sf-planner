@@ -14,7 +14,7 @@ from pathlib import Path
 from core import gamedata as gd
 from core import solver
 
-BACKEND = Path(__file__).resolve().parents[2] / "backend"
+BACKEND = Path(__file__).resolve().parents[2] / "legacy" / "backend"
 REL = 1e-6
 
 

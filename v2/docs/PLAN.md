@@ -1,6 +1,6 @@
 # SF Planner 2.0 — Plan
 
-Approved by Michael Kenning, 2026-11-01. Source: the "SF Planner 2.0 — Plan" doc in the claude.ai Project "Satisfactory Planner". This file is the copy the build session works from; if they ever disagree, ask.
+**Status (2026-11-01): Phases 1–5 complete; cutover done, 2.0 on :8042, 1.x in `legacy/` and tag `v1-final`.** Approved by Michael Kenning, 2026-11-01. Source: the "SF Planner 2.0 — Plan" doc in the claude.ai Project "Satisfactory Planner". This file is the copy the build session works from; if they ever disagree, ask.
 
 Build 2.0 fresh beside 1.x, using 1.x only as reference, in five phases on sfdev1. Each phase ships to docker02 as soon as its checks pass, with tagged commits so any step can be reverted.
 
@@ -18,7 +18,7 @@ Build 2.0 fresh beside 1.x, using 1.x only as reference, in five phases on sfdev
 | Rewrite vs migrate | Fresh 2.0 if easier | New `v2/` tree in the same repo; 1.x stays live until cutover |
 | pytest | OK | Dev only; not in the image |
 | Devices | Desktop first, tablet for out-of-game planning | Desktop layout; one tablet pass at 1024 px |
-| Exposure | LAN only | No auth; temporary port 8043 during the build |
+| Exposure | LAN only | No auth; port 8043 during the build, :8042 since the cutover (2026-11-01) |
 
 ## Architecture
 
@@ -135,5 +135,5 @@ Phase 5 cutover touches 1.x — confirm with Michael before running it.
 - Parser vendoring needs a one-off bundle step (Node + esbuild on sfdev1, dev only); commit the output.
 - Resource node positions/purity are not in the Docs file. Phase 3 first tries the save; if absent, propose a community node table and check its licence with Michael.
 - Not a node-graph canvas: ledger + split rather than a free-form graph editor, unless Michael asks.
-- Temporary port 8043 until cutover.
+- Port 8043 was temporary; 2.0 has served :8042 since the cutover (2026-11-01). Dev server on sfdev1 still uses 8043.
 - 1.x power numbers will differ from 2.0 — that's the fix.

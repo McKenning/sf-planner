@@ -6,7 +6,8 @@ services:
     ports:
       - "8042:8000"
     volumes:
-      - ./data:/app/data
+      # 1.x data stays in the repo-root data/ (gitignored); never written by 2.0
+      - ../data:/app/data
       - ./backend:/app/backend
       - ./frontend:/app/frontend
     environment:

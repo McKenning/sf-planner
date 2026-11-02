@@ -19,7 +19,7 @@ deploy), browser checks `~/pw-venv/bin/python tests/browser_check*.py` against a
 (dev only): `cd v2/tools/vendor && npm ci && npm run build`. Regenerate game data after a game update:
 `v2/.venv/bin/python v2/tools/build_gamedata.py` and review the diff.
 
-## Deploy to docker02 (container `sf-planner-v2`, host port 8043)
+## Deploy to docker02 (container `sf-planner-v2`, host port 8042 since the cutover)
 
 ```
 ssh docker02-deploy backup     # check it printed a file name and exit status 0 — stop if not
@@ -31,7 +31,7 @@ ssh docker02-deploy logs
 ```
 
 Order: push → `backup` → `pull` → `up` or `restart` → `status` → check `/health` and every page on
-http://192.168.23.86:8043. `/health` reports `version`, `tag` and `state` (from `v2/app/version.py`).
+http://192.168.23.86:8042 (nothing should answer on :8043 any more). Note `ssh docker02-deploy status` still probes :8043, so check `/health` on :8042 yourself. `/health` reports `version`, `tag` and `state` (from `v2/app/version.py`).
 If a deploy breaks: `git revert` the commit, push, `pull`, `restart`, then report. History is the rollback;
 never force-push `main`.
 
@@ -49,13 +49,15 @@ never force-push `main`.
 
 ## 1.x and getting it back
 
-- Before cutover 1.x (`ficsit-planner`, :8042) is untouched: `backend/`, `frontend/`, root `Dockerfile`,
-  root `docker-compose.yml` and its `data/planner.db` are unchanged, and 2.0 only mounts that data directory
-  read-only.
-- The cutover is not done yet (needs Michael's approval; the overseer stops 1.x on docker02 and then asks for
-  2.0 to move to :8042). It will create the annotated tag `v1-final` at the exact commit that is live now,
-  move 1.x under `legacy/`, and keep `data/planner.db` on disk unchanged.
-- After cutover, to bring 1.x back: on docker02 stop the 2.0 container, `git checkout v1-final` (or
-  `git checkout v1-final -- backend frontend Dockerfile docker-compose.yml`), `docker compose up -d --build`
-  in the repo root (container `ficsit-planner`, port 8042), and check `http://192.168.23.86:8042/health`.
-  Its database is the untouched `data/planner.db`.
+Cutover done (2026-11-01): 2.0 serves :8042. 1.x was stopped and its container removed (image kept); its code
+is under `legacy/` and annotated tag `v1-final` (commit `99716bd`, the last 1.x commit) marks the exact
+version that was live. 1.x's database is the untouched `data/planner.db` at the repo root (plus the overseer's
+copy `data/planner-v1-final-20261101.db`); 2.0 mounts that directory read-only for its first-start import.
+
+To bring 1.x back (needs a docker02 shell — ask the overseer; nothing here is automatic):
+1. Stop 2.0: `cd /opt/sf-planner/v2 && docker compose stop` (frees :8042).
+2. Start 1.x from `legacy/`: `cd /opt/sf-planner/legacy && docker compose up -d --build`
+   (container `ficsit-planner`, port 8042, data from `../data`). Or from the tag:
+   `git checkout v1-final` and use the original root layout.
+3. Check `http://192.168.23.86:8042/health`. 1.x data is whatever `data/planner.db` holds (2.0 never writes it).
+4. To return to 2.0: stop 1.x, `docker compose up -d` in `v2/`.
