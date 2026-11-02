@@ -82,3 +82,18 @@ def test_every_imported_factory_solves(tmp_path, monkeypatch):
         outputs, _c, _o, res = fs.solve_factory(c, f["id"])
         assert outputs and res["lines"] and not res["warnings"], f["name"]
         assert res["power_mw"] > 0
+
+
+def test_search_and_browse_pages(conn, monkeypatch):
+    from app import browse_routes as br
+    from core import gamedata as gd2
+    r = br.search("iron plate").body
+    names = json.loads(r)["results"]
+    assert names[0]["name"] == "Iron Plate" and names[0]["kind"] == "item"
+    assert any(x["kind"] == "recipe" for x in names)
+    assert json.loads(br.search("").body)["results"] is not None
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException):
+        br.item_page(None, "Desc_Nope_C")
+    with pytest.raises(HTTPException):
+        br.recipe_page(None, "Recipe_Nope_C")

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}{{ it.name }} — SF Planner 2.0{% endblock %}
+{% block main %}
+<h1>{{ it.name }} <span class="tag">item</span></h1>
+<p>{{ "Raw resource / external input" if raw else "Made in a production machine" }} · measured in {{ unit }} · sink points {{ it.sink_points }}{% if it.energy_mj %} · energy {{ "%.0f"|format(it.energy_mj) }} MJ{% endif %}</p>
+<section class="card"><h2>Made by</h2>
+  {% for m in makers %}<p><a href="/recipe/{{ m.cls }}">{{ m.name }}</a> <span class="note">{{ m.machine }}</span>{% if m.alt %} <span class="tag">alt</span>{% endif %}{% if m.cls == default %} <span class="tag">default</span>{% endif %}</p>
+  {% else %}<p>Nothing — this is a raw input.</p>{% endfor %}
+</section>
+<section class="card"><h2>Used in</h2>
+  {% for m in users %}<p><a href="/recipe/{{ m.cls }}">{{ m.name }}</a> <span class="note">{{ m.machine }}</span></p>{% else %}<p>No recipe uses it.</p>{% endfor %}
+</section>
+<p><a class="btn" href="/goals">Plan it on Goals</a></p>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ r.name }} — SF Planner 2.0{% endblock %}
+{% block main %}
+<h1>{{ r.name }} <span class="tag">recipe</span>{% if r.alternate %} <span class="tag">alternate</span>{% endif %}</h1>
+<p>{{ b.name }} · {{ "%g"|format(r.duration_s) }} s per cycle · {{ "%.2f"|format(cpm) }} cycles/min per machine at 100 %</p>
+<section class="card"><table>
+  <tr><th>Inputs</th><th>Per cycle</th><th>Per min per machine</th></tr>
+  {% for cls, n, a, pm in inputs %}<tr><td><a href="/item/{{ cls }}">{{ n }}</a></td><td class="num">{{ "%g"|format(a) }}</td><td class="num">{{ "%.2f"|format(pm) }}/min</td></tr>{% endfor %}
+  <tr><th>Outputs</th><th>Per cycle</th><th>Per min per machine</th></tr>
+  {% for cls, n, a, pm in outputs %}<tr><td><a href="/item/{{ cls }}">{{ n }}</a></td><td class="num">{{ "%g"|format(a) }}</td><td class="num">{{ "%.2f"|format(pm) }}/min</td></tr>{% endfor %}
+</table></section>
+<section class="card"><h2>Power per machine</h2>
+  <p>{{ "%.2f"|format(power) }} MW at 100 % · {{ "%.2f"|format(power250) }} MW at 250 % · {% if power_full %}{{ "%.2f"|format(power_full) }} MW fully slooped (output ×2){% else %}this machine cannot take Somersloops{% endif %}
+  {% if b.variable_power %}<br><span class="note">Variable-power machine: the average of its minimum and maximum draw.</span>{% endif %}</p>
+</section>
+{% endblock %}

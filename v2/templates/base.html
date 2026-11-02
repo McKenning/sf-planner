@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}SF Planner 2.0{% endblock %}</title>
+<script>try{var t=localStorage.getItem("sfp-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;}catch(e){}</script>
 <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
@@ -16,7 +17,15 @@
   <a href="/power" class="{{ 'on' if nav == 'power' }}">Power</a>
   <a href="/resources" class="{{ 'on' if nav == 'resources' }}">Resources</a>
   <a href="/import" class="{{ 'on' if nav == 'import' }}">Import</a>
+  <div class="tools">
+    <button id="open-search" type="button" aria-label="Search items, recipes and factories">Search <span class="kbd">Ctrl K</span></button>
+    <button id="theme" type="button" aria-label="Change colour theme">Theme: system</button>
+  </div>
 </nav>
+<div id="palette" hidden role="dialog" aria-modal="true" aria-label="Search">
+  <div class="box"><input id="q" type="search" placeholder="Search items, recipes, factories…" autocomplete="off" aria-label="Search"><ul id="results"></ul></div>
+</div>
+<script type="module" src="/static/js/shell.js"></script>
 <main>{% block main %}{% endblock %}</main>
 </body>
 </html>
