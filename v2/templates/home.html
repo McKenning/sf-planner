@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>World</h1>
+{% if worlds %}
+  {% for w in worlds %}
+  <section class="card">
+    <h2>{{ w.name }}</h2>
+    <p class="big">{{ counts.factories }} factories</p>
+    <p>{{ counts.power_plants }} power plants · {{ counts.archived }} archived draft(s) · game build {{ build.build }} (Satisfactory {{ build.game_version }})</p>
+  </section>
+  {% endfor %}
+{% else %}
+  <p>No world yet. 1.x data has not been imported.</p>
+{% endif %}
+<p class="note">Phase 1: read-only. Planning, solver and world view arrive in later phases.</p>
+{% endblock %}

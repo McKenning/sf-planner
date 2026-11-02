@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>Power</h1>
+<table>
+<tr><th>Name</th><th>Generator</th><th>Fuel</th><th>Count</th><th>Clock</th></tr>
+{% for x in plants %}<tr><td>{{ x.p.name }}</td><td>{{ x.generator }}</td><td>{{ x.fuel }}</td>
+<td>{{ x.p.count }}</td><td>{{ "%g%%"|format(x.p.clock_pct) }}</td></tr>
+{% else %}<tr><td colspan="5">No power plants.</td></tr>{% endfor %}
+</table>
+<p class="note">Generation totals (MW) are computed in Phase 3.</p>
+{% endblock %}

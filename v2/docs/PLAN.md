@@ -59,7 +59,7 @@ Everything belongs to a **world**; factories are the only planning unit (1.x's d
 | `world_recipe` | Default recipe per item for the world |
 | `factory` | Name, status (planned / built / draft / archived), location x,y,z, notes, origin (manual / import) |
 | `factory_output` | What a factory is meant to make: item + rate/min |
-| `factory_recipe` | Per-factory recipe override |
+| `factory_recipe` | Per-factory, per-item override: recipe (nullable), `clock_pct` (nullable, NULL = 100), `sloops` (integer count, 0..slots of that recipe's machine, NULL = 0). Added 2026-11-01 at Michael's direction so 1.x clock/sloop overrides survive import; 1.x `slooped=1` maps to the machine's full slot count |
 | `production_line` | Item, recipe, machine, count, clock %, sloops. Solver writes these for planned factories; import writes them for built ones |
 | `flow` | Item between factories: from, to, item, rate/min, transport (belt, train, drone, truck) |
 | `resource_node` | Node id, resource, purity, position |

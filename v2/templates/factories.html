@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>Factories</h1>
+{% for r in rows %}
+<section class="card">
+  <h2>{{ r.f.name }} <span class="tag">{{ r.f.status }}</span> <span class="tag">{{ r.f.origin }}</span></h2>
+  <p class="label">Outputs (items/min)</p>
+  {% if r.outputs %}
+  <ul>{% for o in r.outputs %}<li>{{ o.item }} — {{ "%.2f"|format(o.rate) }}/min</li>{% endfor %}</ul>
+  {% else %}<p>None</p>{% endif %}
+  {% if r.overrides %}
+  <details><summary>{{ r.overrides|length }} per-item override(s)</summary>
+  <table><tr><th>Item</th><th>Recipe</th><th>Clock</th><th>Somersloops</th></tr>
+  {% for o in r.overrides %}<tr><td>{{ o.item }}</td><td>{{ o.recipe or "default" }}</td>
+    <td>{{ ("%g%%"|format(o.clock)) if o.clock else "100%" }}</td>
+    <td>{{ o.sloops or 0 }}</td></tr>{% endfor %}
+  </table></details>
+  {% endif %}
+</section>
+{% else %}<p>No factories.</p>{% endfor %}
+{% endblock %}

@@ -1,0 +1,27 @@
+services:
+  sf-planner-v2:
+    build: .
+    container_name: sf-planner-v2
+    restart: always
+    ports:
+      - "8043:8000"
+    volumes:
+      - ./data:/app/data
+      # 1.x data directory, read-only: the first start imports from a copy of planner.db
+      - ../data:/app/1x-data:ro
+      # code is mounted so `restart` picks up changes; `up` rebuilds when deps change
+      - ./app:/app/app
+      - ./core:/app/core
+      - ./static:/app/static
+      - ./templates:/app/templates
+      - ./migrations:/app/migrations
+      - ./tools:/app/tools
+    environment:
+      - TZ=America/Denver
+      - SFP_1X_DB=/app/1x-data/planner.db
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

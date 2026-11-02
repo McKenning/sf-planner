@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}SF Planner 2.0{% endblock %}</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<nav class="side">
+  <div class="brand">SF Planner <span>2.0</span></div>
+  <a href="/" class="{{ 'on' if nav == 'world' }}">World</a>
+  <a href="/factories" class="{{ 'on' if nav == 'factories' }}">Factories</a>
+  <a href="/power" class="{{ 'on' if nav == 'power' }}">Power</a>
+</nav>
+<main>{% block main %}{% endblock %}</main>
+</body>
+</html>
