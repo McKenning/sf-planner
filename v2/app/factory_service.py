@@ -123,7 +123,9 @@ def export_xlsx(fname: str, outputs, res) -> bytes:
     wb = Workbook()
     ws = wb.active
     ws.title = "Summary"
-    ws.append([f"{fname} — SF Planner 2.0 (Satisfactory {gd.load()['game_version']}, build {gd.load()['build']})"])
+    # name goes last: a factory name starting with = + - @ would otherwise become a spreadsheet formula
+    ws.append([f"SF Planner 2.0 (Satisfactory {gd.load()['game_version']}, build {gd.load()['build']}) — {fname}"])
+    ws["A1"].data_type = "s"
     ws["A1"].font = Font(bold=True, size=13)
     ws.append([])
     ws.append(["Total power (MW)", round(p["power_mw"], 2)])
