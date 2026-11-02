@@ -27,7 +27,7 @@ def seed_from_1x() -> None:
     conn = db.connect()
     try:
         has_world = conn.execute("SELECT 1 FROM world LIMIT 1").fetchone()
-        done = conn.execute("PRAGMA user_version").fetchone()[0] >= 1
+        done = conn.execute("PRAGMA user_version").fetchone()[0] >= 2
     finally:
         conn.close()
     if has_world and done:
@@ -44,7 +44,7 @@ def seed_from_1x() -> None:
         print("1.x import:", import_1x.run(copy))
     conn = db.connect()
     try:
-        conn.execute("PRAGMA user_version = 1")  # one-shot marker (v1 = 1.x import incl. plan-clock merge)
+        conn.execute("PRAGMA user_version = 2")  # one-shot marker (2 = 1.x import incl. plan clocks + resources)
     finally:
         conn.close()
 
@@ -59,6 +59,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="SF Planner 2.0", lifespan=lifespan)
 from app.factory_routes import router as factory_router  # noqa: E402
 app.include_router(factory_router)
+from app.world_routes import router as world_router  # noqa: E402
+app.include_router(world_router)
 app.mount("/static", StaticFiles(directory=str(ROOT / "static")), name="static")
 
 
@@ -86,21 +88,6 @@ def _render(request, name, **ctx):
     return templates.TemplateResponse(request, name, ctx)
 
 
-@app.get("/", response_class=HTMLResponse)
-def home(request: Request):
-    conn = db.connect()
-    try:
-        worlds = conn.execute("SELECT * FROM world ORDER BY id").fetchall()
-        counts = {
-            "factories": conn.execute("SELECT COUNT(*) FROM factory WHERE status != 'archived'").fetchone()[0],
-            "archived": conn.execute("SELECT COUNT(*) FROM factory WHERE status = 'archived'").fetchone()[0],
-            "power_plants": conn.execute("SELECT COUNT(*) FROM power_plant").fetchone()[0],
-        }
-    finally:
-        conn.close()
-    return _render(request, "home.html", nav="world", worlds=worlds, counts=counts, build=gd.load())
-
-
 @app.get("/factories", response_class=HTMLResponse)
 def factories(request: Request):
     from app import factory_service as fs
@@ -116,14 +103,3 @@ def factories(request: Request):
     finally:
         conn.close()
     return _render(request, "factories.html", nav="factories", rows=rows)
-
-
-@app.get("/power", response_class=HTMLResponse)
-def power(request: Request):
-    conn = db.connect()
-    try:
-        plants = [{"p": p, "generator": gd.load()["generators"][p["generator"]]["name"],
-                   "fuel": _name(p["fuel"])} for p in conn.execute("SELECT * FROM power_plant ORDER BY id")]
-    finally:
-        conn.close()
-    return _render(request, "power.html", nav="power", plants=plants)

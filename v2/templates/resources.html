@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>Resources <span class="note">node counts and how they are mined — the world budget</span></h1>
+<section class="card">
+  <table>
+    <tr><th>Resource</th><th>Pure</th><th>Normal</th><th>Impure</th><th>Extractor</th><th>Clock %</th><th>Available / min</th><th>Used / min</th><th></th></tr>
+    {% for r in rows %}
+    <tr>
+      <td><form id="rf{{ loop.index }}" method="post" action="/resources/update"><input type="hidden" name="resource" value="{{ r.resource }}"></form>{{ r.name }}</td>
+      <td><input form="rf{{ loop.index }}" class="short" type="number" min="0" name="pure" value="{{ r.pure }}" aria-label="Pure nodes"></td>
+      <td><input form="rf{{ loop.index }}" class="short" type="number" min="0" name="normal" value="{{ r.normal }}" aria-label="Normal nodes"></td>
+      <td><input form="rf{{ loop.index }}" class="short" type="number" min="0" name="impure" value="{{ r.impure }}" aria-label="Impure nodes"></td>
+      <td><select form="rf{{ loop.index }}" name="miner" aria-label="Extractor">{% for k, n in extractors.items() %}<option value="{{ k }}" {{ 'selected' if r.miner == k }}>{{ n }}</option>{% endfor %}</select></td>
+      <td><input form="rf{{ loop.index }}" class="short" type="number" min="1" max="250" step="any" name="clock_pct" value="{{ '%g'|format(r.clock_pct) }}" aria-label="Clock percent"></td>
+      <td class="num">{{ "unlimited" if r.available == inf else "%.0f"|format(r.available) }}</td>
+      <td class="num">{{ "%.0f"|format(r.demand) }}</td>
+      <td><button form="rf{{ loop.index }}">Save</button></td></tr>
+    {% else %}<tr><td colspan="9">No resources yet.</td></tr>{% endfor %}
+  </table>
+  <p class="note">Rates come from the game's extractor data × node purity (impure ×0.5, normal ×1, pure ×2) × clock. Individual node positions arrive with the save import.</p>
+</section>
+{% endblock %}

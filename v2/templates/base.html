@@ -10,8 +10,11 @@
 <nav class="side">
   <div class="brand">SF Planner <span>2.0</span></div>
   <a href="/" class="{{ 'on' if nav == 'world' }}">World</a>
+  <a href="/goals" class="{{ 'on' if nav == 'goals' }}">Goals</a>
   <a href="/factories" class="{{ 'on' if nav == 'factories' }}">Factories</a>
+  <a href="/flows" class="{{ 'on' if nav == 'flows' }}">Flows</a>
   <a href="/power" class="{{ 'on' if nav == 'power' }}">Power</a>
+  <a href="/resources" class="{{ 'on' if nav == 'resources' }}">Resources</a>
 </nav>
 <main>{% block main %}{% endblock %}</main>
 </body>

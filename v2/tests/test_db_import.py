@@ -12,10 +12,10 @@ pytestmark = pytest.mark.skipif(not SRC.exists(), reason="1.x snapshot not prese
 
 def test_migrate_idempotent(tmp_path):
     p = tmp_path / "t.db"
-    assert db.migrate(p) == [1]
+    assert db.migrate(p) == [1, 2]
     assert db.migrate(p) == []
     c = db.connect(p)
-    assert {r[0] for r in c.execute("select version from schema_version")} == {1}
+    assert {r[0] for r in c.execute("select version from schema_version")} == {1, 2}
 
 
 def test_import_1x_all_present_and_idempotent(tmp_path):

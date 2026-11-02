@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>Goals <span class="note">top-down: what the world needs → split into factories</span></h1>
+
+<section class="card">
+  <h2>World goals</h2>
+  <table>
+    {% for g in goals %}<tr><td>{% if g.item %}{{ name(g.item) }}{% else %}Power{% endif %}</td>
+      <td class="num">{% if g.item %}{{ "%.2f"|format(g.rate_per_min) }}/min{% else %}{{ "%.0f"|format(g.power_mw) }} MW{% endif %}</td>
+      <td><form method="post" action="/goals/delete" class="inline"><input type="hidden" name="goal_id" value="{{ g.id }}"><button class="quiet">Remove</button></form></td></tr>
+    {% else %}<tr><td colspan="3">No goals yet, e.g. Project Assembly parts at a rate.</td></tr>{% endfor %}
+  </table>
+  <form method="post" action="/goals/add" class="inline add">
+    <input list="items" name="item" placeholder="Item name" required aria-label="Item">
+    <input type="number" name="rate" step="any" min="0.0001" placeholder="per min" required aria-label="Rate per minute">
+    <button>Add goal</button></form>
+  <form method="post" action="/goals/power" class="inline add">
+    <input type="number" name="mw" step="any" min="1" placeholder="MW" required aria-label="Power goal in MW"><button>Set power goal</button></form>
+  <datalist id="items">{% for n in item_names %}<option value="{{ n }}">{% endfor %}</datalist>
+</section>
+
+{% if lines %}
+<section class="card">
+  <h2>Raw totals vs budget</h2>
+  <table><tr><th>Resource</th><th>Needed / available per min</th><th>Status</th></tr>
+  {% for b in raws %}{% if b.demand > 0 %}<tr><td>{{ name(b.item) }}</td>
+    <td>{{ "%.0f"|format(b.demand) }} / {{ "unlimited" if b.available == inf else ("%.0f"|format(b.available) if b.available is not none else "not budgeted") }}</td>
+    <td>{% if b.over %}<span class="pill bad">OVER BUDGET</span>{% elif b.unbudgeted %}<span class="pill">No budget set</span>{% else %}<span class="pill ok">OK {{ "%.0f"|format(b.pct) }}%</span>{% endif %}</td></tr>{% endif %}{% endfor %}
+  </table>
+  <p class="note">World power for this tree: {{ "%.1f"|format(res.power_mw) }} MW · Somersloops {{ res.sloops_total }}</p>
+</section>
+
+<section class="card">
+  <h2>Production tree <span class="note">(final products first; choose recipes, then assign to factories)</span></h2>
+  <table class="lines">
+    <tr><th>Item</th><th>Needed</th><th>Recipe</th><th>Machines</th><th>Assigned to</th><th>Split</th></tr>
+    {% for l in lines %}
+    <tr><td>{{ l.item_names|join(", ") }}</td><td class="num">{{ "%.2f"|format(l.rate) }}/min</td>
+      <td>{{ l.recipe_name }}
+        <details><summary>Compare / change</summary>
+        <table class="cmp"><tr><th>Recipe</th><th>Machine</th><th>Machines</th><th>Power @100%</th><th>Inputs / min</th><th></th></tr>
+        {% for o in l.options %}<tr class="{{ 'cur' if o.current }}"><td>{{ o.name }}{% if o.alternate %} <span class="tag">alt</span>{% endif %}</td>
+          <td>{{ o.machine }}</td><td class="num">{{ "%.2f"|format(o.machines) }}</td><td class="num">{{ "%.1f"|format(o.power_mw) }} MW</td>
+          <td>{% for n, v in o.inputs %}{{ n }} {{ "%.1f"|format(v) }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+          <td>{% if o.current %}<span class="tag">in use</span>{% else %}<form method="post" action="/goals/recipe" class="inline"><input type="hidden" name="item" value="{{ l.item }}"><input type="hidden" name="recipe" value="{{ o.recipe }}"><button>Use</button></form>{% endif %}</td></tr>{% endfor %}
+        </table></details></td>
+      <td class="num">{{ l.count }}× {{ l.machine_name }}</td>
+      <td>{% for fid, fname in l.assigned %}<a href="/factory/{{ fid }}">{{ fname }}</a>{% if not loop.last %}, {% endif %}{% else %}<span class="pill">Unassigned</span>{% endfor %}</td>
+      <td><form method="post" action="/goals/assign" class="inline">
+        <input type="hidden" name="item" value="{{ l.item }}">
+        <select name="factory_id" aria-label="Factory"><option value="">New factory…</option>{% for f in facs %}<option value="{{ f.id }}">{{ f.name }}</option>{% endfor %}</select>
+        <input name="new_name" placeholder="New factory name" aria-label="New factory name">
+        <label><input type="checkbox" name="subtree" value="1" checked> with everything below</label>
+        <button>Assign</button></form></td></tr>
+    {% endfor %}
+  </table>
+</section>
+{% endif %}
+{% endblock %}

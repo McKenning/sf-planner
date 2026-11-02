@@ -1,11 +1,35 @@
 {% extends "base.html" %}
 {% block main %}
 <h1>Power</h1>
-<table>
-<tr><th>Name</th><th>Generator</th><th>Fuel</th><th>Count</th><th>Clock</th></tr>
-{% for x in plants %}<tr><td>{{ x.p.name }}</td><td>{{ x.generator }}</td><td>{{ x.fuel }}</td>
-<td>{{ x.p.count }}</td><td>{{ "%g%%"|format(x.p.clock_pct) }}</td></tr>
-{% else %}<tr><td colspan="5">No power plants.</td></tr>{% endfor %}
-</table>
-<p class="note">Generation totals (MW) are computed in Phase 3.</p>
+<section class="strip">
+  <div><span class="label">Generated</span><span class="big">{{ "%.0f"|format(ov.gen_mw) }} MW</span></div>
+  <div><span class="label">Used by factories</span><span class="big">{{ "%.0f"|format(ov.used_mw) }} MW</span></div>
+  <div><span class="label">Balance</span><span class="big {{ 'bad' if ov.used_mw > ov.gen_mw }}">{{ "%+.0f"|format(ov.gen_mw - ov.used_mw) }} MW</span>
+    <span class="note">{{ "SHORT" if ov.used_mw > ov.gen_mw else "OK" }}</span></div>
+</section>
+<section class="card">
+  <table>
+    <tr><th>Plant</th><th>Generator</th><th>Fuel</th><th>Count</th><th>Clock %</th><th>MW</th><th>Fuel / min</th><th>Water / min</th><th>Waste / min</th><th></th></tr>
+    {% for x in rows %}<tr><td>{{ x.p.name }}</td><td>{{ x.generator }}</td><td>{{ x.fuel }}</td>
+      <td><form id="pf{{ x.p.id }}" method="post" action="/power/update"><input type="hidden" name="plant_id" value="{{ x.p.id }}"></form>
+        <input form="pf{{ x.p.id }}" class="short" type="number" min="1" name="count" value="{{ x.p.count }}" aria-label="Count"></td>
+      <td><input form="pf{{ x.p.id }}" class="short" type="number" min="1" max="250" step="any" name="clock_pct" value="{{ '%g'|format(x.p.clock_pct) }}" aria-label="Clock percent"></td>
+      <td class="num">{{ "%.0f"|format(x.st.mw) }}</td><td class="num">{{ "%.2f"|format(x.st.fuel_per_min) }}</td>
+      <td class="num">{{ "%.1f"|format(x.st.supplemental_per_min) if x.water else "—" }}</td>
+      <td class="num">{{ "%.1f"|format(x.st.waste_per_min) ~ " " ~ x.waste if x.waste else "—" }}</td>
+      <td><button form="pf{{ x.p.id }}">Save</button>
+        <form method="post" action="/power/delete" class="inline"><input type="hidden" name="plant_id" value="{{ x.p.id }}"><button class="quiet">Remove</button></form></td></tr>
+    {% else %}<tr><td colspan="10">No power plants.</td></tr>{% endfor %}
+  </table>
+</section>
+<section class="card"><h2>Add power plants</h2>
+  <form method="post" action="/power/add" class="inline">
+    <input name="name" placeholder="Name (optional)" aria-label="Name">
+    <select name="generator" id="gen" aria-label="Generator">{% for o in options %}<option value="{{ o.generator }}">{{ o.name }}</option>{% endfor %}</select>
+    <select name="fuel" aria-label="Fuel">{% for o in options %}{% for f in o.fuels %}<option value="{{ f.item }}" data-gen="{{ o.generator }}">{{ o.name }}: {{ f.name }}</option>{% endfor %}{% endfor %}</select>
+    <input class="short" type="number" name="count" value="1" min="1" aria-label="Count">
+    <input class="short" type="number" name="clock_pct" value="100" min="1" max="250" step="any" aria-label="Clock percent">
+    <button>Add</button></form>
+  <p class="note">The fuel must belong to the chosen generator. Water and fuel counts feed the item ledger; generators scale linearly with clock.</p>
+</section>
 {% endblock %}

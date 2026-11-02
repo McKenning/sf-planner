@@ -110,6 +110,24 @@ def _import_container(conn, src, world_id, *, ref, name, status, outputs_sql, ch
     stats["factories"] += 1
 
 
+def _import_resources(conn, src, wid, stats):
+    """1.x's per-plan resource node counts -> world_resource (first plan = the active one). Insert-only."""
+    from core import budget
+    row = src.execute("SELECT id FROM plans ORDER BY id LIMIT 1").fetchone()
+    if not row:
+        return
+    for r in src.execute("SELECT * FROM resources WHERE plan_id=? ORDER BY id", (row["id"],)):
+        item = _item(r["resource"])
+        ex = budget.default_extractor(item)
+        tier = r["miner_tier"] or ""
+        if ex and ex.startswith("Build_MinerMk") and tier.startswith("Mk."):
+            ex = f"Build_MinerMk{tier[3:]}_C"
+        n = conn.execute(
+            "INSERT OR IGNORE INTO world_resource(world_id,resource,pure,normal,impure,miner,clock_pct) "
+            "VALUES (?,?,?,?,?,?,250)", (wid, item, r["pure"], r["normal"], r["impure"], ex)).rowcount
+        stats["resources"] = stats.get("resources", 0) + n
+
+
 def run(src_path: Path | str, dest_path: Path | str | None = None) -> dict:
     src = sqlite3.connect(f"file:{src_path}?mode=ro", uri=True)
     src.row_factory = sqlite3.Row
@@ -139,6 +157,7 @@ def run(src_path: Path | str, dest_path: Path | str | None = None) -> dict:
                     sloop_sql="SELECT product, slooped FROM sloop_overrides WHERE plan_id=?",
                     key=p["id"], stats=stats)
                 stats["archived_plans"] += stats["factories"] - before
+            _import_resources(conn, src, wid, stats)
             for pp in src.execute("SELECT * FROM power_plants ORDER BY id"):
                 ref = f"1x:power_plant:{pp['id']}"
                 if conn.execute("SELECT 1 FROM power_plant WHERE source_ref=?", (ref,)).fetchone():

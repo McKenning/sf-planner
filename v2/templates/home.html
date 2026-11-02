@@ -1,16 +1,59 @@
 {% extends "base.html" %}
+{% macro rate(v) %}{{ "%.2f"|format(v) }}/min{% endmacro %}
 {% block main %}
-<h1>World</h1>
-{% if worlds %}
-  {% for w in worlds %}
-  <section class="card">
-    <h2>{{ w.name }}</h2>
-    <p class="big">{{ counts.factories }} factories</p>
-    <p>{{ counts.power_plants }} power plants · {{ counts.archived }} archived draft(s) · game build {{ build.build }} (Satisfactory {{ build.game_version }})</p>
-  </section>
-  {% endfor %}
-{% else %}
-  <p>No world yet. 1.x data has not been imported.</p>
+<h1>World{% if w %}: {{ w.name }}{% endif %}</h1>
+
+<section class="strip">
+  <div><span class="label">Power used / generated</span>
+    <span class="big {{ 'bad' if ov.used_mw > ov.gen_mw }}">{{ "%.0f"|format(ov.used_mw) }} / {{ "%.0f"|format(ov.gen_mw) }} MW</span>
+    <span class="note">{{ "Short by %.0f MW"|format(ov.used_mw - ov.gen_mw) if ov.used_mw > ov.gen_mw else "Surplus %.0f MW"|format(ov.gen_mw - ov.used_mw) }}{% if ov.power_goal %} · goal {{ "%.0f"|format(ov.power_goal) }} MW{% endif %}</span></div>
+  <div><span class="label">Factories</span><span class="big">{{ ov.factories|selectattr("status", "in", ["planned","built"])|list|length }}</span></div>
+  <div><span class="label">Flows</span><span class="big">{{ flows|length }}</span></div>
+  <div><span class="label">Warnings</span><span class="big {{ 'bad' if ov.warnings }}">{{ ov.warnings|length }}</span></div>
+</section>
+
+{% if ov.warnings %}
+<section class="card warn"><h2>Warnings</h2><ul>{% for x in ov.warnings %}<li>{{ x }}</li>{% endfor %}</ul></section>
 {% endif %}
-<p class="note">Phase 1: read-only. Planning, solver and world view arrive in later phases.</p>
+
+<section class="card">
+  <h2>Resource budget <span class="note">(factory demand vs what your nodes can supply)</span></h2>
+  {% if ov.budget %}
+  <table>
+    <tr><th>Resource</th><th>Used / available per min</th><th>Status</th></tr>
+    {% for b in ov.budget %}{% if b.demand > 0 or b.available is not none %}
+    <tr><td>{{ name(b.item) }}</td>
+      <td>{{ "%.0f"|format(b.demand) }} / {{ "unlimited" if b.available == inf else ("%.0f"|format(b.available) if b.available is not none else "not budgeted") }}
+        {% if b.available is not none and b.available != inf and b.available > 0 %}<div class="bar"><span class="{{ 'over' if b.over }}" style="width:{{ [b.pct, 100]|min }}%"></span></div>{% endif %}</td>
+      <td>{% if b.over %}<span class="pill bad">OVER BUDGET</span>{% elif b.available is none and b.demand > 0 %}<span class="pill">No budget set</span>{% elif b.demand == 0 %}<span class="pill">Unused</span>{% else %}<span class="pill ok">OK {{ "%.0f"|format(b.pct) }}%</span>{% endif %}</td></tr>
+    {% endif %}{% endfor %}
+  </table>
+  {% else %}<p>No resource budget yet — see <a href="/resources">Resources</a>.</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Item ledger <span class="note">(deficits first)</span></h2>
+  <table>
+    <tr><th>Item</th><th>Supply</th><th>Demand</th><th>Balance</th><th>Action</th></tr>
+    {% for l in ov.ledger %}
+    <tr><td>{{ name(l.item) }}</td><td class="num">{{ rate(l.supply) }}</td><td class="num">{{ rate(l.demand) }}</td>
+      <td class="num">{% if l.net < -0.0000001 %}<span class="pill bad">DEFICIT {{ rate(-l.net) }}</span>{% elif l.net > 0.0000001 %}<span class="pill ok">Surplus {{ rate(l.net) }}</span>{% else %}<span class="pill ok">Balanced</span>{% endif %}</td>
+      <td>{% if l.net < -0.0000001 %}
+        <form method="post" action="/ledger/link" class="inline"><input type="hidden" name="item" value="{{ l.item }}">
+          <select name="from_factory" aria-label="Supplying factory">{% for f in factories %}<option value="{{ f.id }}">{{ f.name }}</option>{% endfor %}</select>
+          <button>Link</button></form>{% endif %}
+        <details><summary>Detail</summary><span class="note">
+          {% for n, r in l.sources %}+ {{ n }} {{ rate(r) }}<br>{% endfor %}{% for n, r in l.sinks %}− {{ n }} {{ rate(r) }}<br>{% endfor %}</span></details></td></tr>
+    {% else %}<tr><td colspan="5">Nothing to balance yet.</td></tr>{% endfor %}
+  </table>
+</section>
+
+<h2>Factories</h2>
+{% for f in ov.factories %}
+<section class="card"><h3><a href="/factory/{{ f.id }}">{{ f.name }}</a> <span class="tag">{{ f.status }}</span></h3>
+  <p><strong>{{ "%.1f"|format(f.power_mw) }} MW</strong> · {{ f.machines }} machines · {{ f.sloops }} Somersloops
+  {% for item, r in f.outputs.items() %}<br>{{ name(item) }} {{ rate(r) }}{% endfor %}</p></section>
+{% else %}<p>No factories yet. Start in <a href="/goals">Goals</a> or <a href="/factories">Factories</a>.</p>{% endfor %}
+
+<p class="note">Game build {{ build.build }} (Satisfactory {{ build.game_version }}). Power counts factory machines only.</p>
 {% endblock %}

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>Flows <span class="note">items moving between factories</span></h1>
+<section class="card">
+  <table>
+    <tr><th>Item</th><th>From → To</th><th>Rate</th><th>Transport</th><th>Source</th><th></th></tr>
+    {% for f in flows %}<tr><td>{{ f.item_name }}</td><td>{{ f.from_name }} → {{ f.to_name }}</td><td class="num">{{ "%.2f"|format(f.rate_per_min) }}/min</td>
+      <td><form method="post" action="/flows/transport" class="inline"><input type="hidden" name="flow_id" value="{{ f.id }}">
+        <select name="transport" aria-label="Transport"><option value="">not set</option>{% for t in transports %}<option {{ 'selected' if f.transport == t }}>{{ t }}</option>{% endfor %}</select><button class="quiet">Set</button></form></td>
+      <td>{{ "auto" if f.auto else "manual" }}</td>
+      <td>{% if not f.auto %}<form method="post" action="/flows/delete" class="inline"><input type="hidden" name="flow_id" value="{{ f.id }}"><button class="quiet">Remove</button></form>{% endif %}</td></tr>
+    {% else %}<tr><td colspan="6">No flows. Splitting a goal across factories creates them automatically.</td></tr>{% endfor %}
+  </table>
+</section>
+<section class="card"><h2>Add a flow by hand</h2>
+  <form method="post" action="/flows/add" class="inline">
+    <input list="items" name="item" placeholder="Item" required aria-label="Item">
+    <select name="from_factory" aria-label="From">{% for id, n in factories.items() %}<option value="{{ id }}">{{ n }}</option>{% endfor %}</select> →
+    <select name="to_factory" aria-label="To">{% for id, n in factories.items() %}<option value="{{ id }}">{{ n }}</option>{% endfor %}</select>
+    <input type="number" name="rate" step="any" min="0.0001" placeholder="per min" required aria-label="Rate per minute">
+    <select name="transport" aria-label="Transport"><option value="">transport…</option>{% for t in transports %}<option>{{ t }}</option>{% endfor %}</select>
+    <button>Add flow</button></form>
+  <datalist id="items">{% for n in item_names %}<option value="{{ n }}">{% endfor %}</datalist>
+</section>
+{% endblock %}

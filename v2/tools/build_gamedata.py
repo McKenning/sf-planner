@@ -67,7 +67,8 @@ def build(src):
                 "name": c["mDisplayName"],
                 "form": c.get("mForm", "RF_SOLID"),
                 "sink_points": int(f(c, "mResourceSinkPoints")),
-                "energy_mj": f(c, "mEnergyValue"),
+                # fluids: Docs give MJ per mL; we use m3 everywhere, so MJ per m3
+                "energy_mj": f(c, "mEnergyValue") * (1000 if c.get("mForm") in FLUID else 1),
                 "raw": c["ClassName"] in raw_resources,
             }
     fluid_items = {k for k, v in items.items() if v["form"] in FLUID}

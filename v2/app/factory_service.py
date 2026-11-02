@@ -20,7 +20,11 @@ def name(item_class: str) -> str:
 def load_inputs(conn, factory_id: int):
     outputs = {r["item"]: r["rate_per_min"] for r in conn.execute(
         "SELECT item, rate_per_min FROM factory_output WHERE factory_id=? ORDER BY id", (factory_id,))}
-    choices, overrides = {}, {}
+    # world default recipes first, then this factory's own overrides
+    choices = {r["item"]: r["recipe"] for r in conn.execute(
+        "SELECT item, recipe FROM world_recipe WHERE world_id=(SELECT world_id FROM factory WHERE id=?)",
+        (factory_id,))}
+    overrides = {}
     for r in conn.execute("SELECT * FROM factory_recipe WHERE factory_id=?", (factory_id,)):
         if r["recipe"]:
             choices[r["item"]] = r["recipe"]
@@ -29,9 +33,14 @@ def load_inputs(conn, factory_id: int):
     return outputs, choices, overrides
 
 
+def external_inputs(conn, factory_id: int) -> set:
+    return {r["item"] for r in conn.execute("SELECT item FROM factory_input WHERE factory_id=?", (factory_id,))}
+
+
 def solve_factory(conn, factory_id: int):
     outputs, choices, overrides = load_inputs(conn, factory_id)
-    return outputs, choices, overrides, solver.solve(outputs, choices, overrides)
+    return outputs, choices, overrides, solver.solve(outputs, choices, overrides,
+                                                     external=external_inputs(conn, factory_id))
 
 
 def present(res: dict) -> dict:

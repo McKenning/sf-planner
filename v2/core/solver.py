@@ -33,10 +33,12 @@ def resolve_recipe(item: str, choices: dict, warnings: list) -> str | None:
 
 
 def solve(outputs: dict, choices: dict | None = None, overrides: dict | None = None,
-          max_iter: int = 20000, tol: float = 1e-11) -> dict:
+          external: set | None = None, max_iter: int = 20000, tol: float = 1e-11) -> dict:
     """outputs: {item_class: rate/min}. choices: {item: recipe_class}.
     overrides: {item: {"clock_pct": float|None, "sloops": int|None}} (applies to the recipe line for item).
+    external: items taken from other factories — treated like raw inputs (reported in `raws`).
     """
+    external = external or set()
     choices = choices or {}
     overrides = overrides or {}
     recipes, buildings = gd.recipes(), gd.buildings()
@@ -50,7 +52,7 @@ def solve(outputs: dict, choices: dict | None = None, overrides: dict | None = N
     seen = set(stack)
     while stack:
         item = stack.pop()
-        if rc.is_raw(item):
+        if rc.is_raw(item) or (item in external and item not in targets):
             raw_items.add(item)
             continue
         r = resolve_recipe(item, choices, warnings)
