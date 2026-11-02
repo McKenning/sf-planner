@@ -66,7 +66,7 @@ Newest entries at the bottom. One entry per step: date/time (MT), what changed, 
 - Deployed `4cc0c88` via pull + restart; `/health`, `/`, `/factories`, `/power` 200. The startup backfill ran once on docker02 (`backfilled: 56`).
 - **Open: `ssh docker02-deploy backup` failed ("mkdir: Permission denied")** and my deploy chain did not stop on it (pipe to `tail`), so that restart ran without a dated backup. Impact is nil here (the DB held only the re-creatable 1.x import and the backfill is fill-only; 1.x remains the source), but the backup command needs fixing on docker02 (the forced-command user cannot create the backup directory) before users edit data in 2.0. I will check the exit status of `backup` from now on and stop deploying migrations/data changes if it fails.
 
-BLOCKED: `docker02-deploy backup` fails with "mkdir: Permission denied" — needs an overseer/Michael fix on docker02 (permissions on the backup dir used by /usr/local/bin/sf-deploy). Not blocking code work; the app also writes its own `planner2.pre-migration-*.db` copies before schema migrations. Phase 2 UI will start letting users edit data, so please fix before the Phase 2 tag. Recommendation: create the dir owned by the deploy user, or point backups into `/opt/sf-planner/v2/data/backups/`.
+BLOCKED (RESOLVED 2026-11-01 ~20:49 by overseer — wrapper bug, data dir was root-owned; backup now writes a consistent sqlite copy with integrity_check to v2/data/backups/): `docker02-deploy backup` fails with "mkdir: Permission denied" — needs an overseer/Michael fix on docker02 (permissions on the backup dir used by /usr/local/bin/sf-deploy). Not blocking code work; the app also writes its own `planner2.pre-migration-*.db` copies before schema migrations. Phase 2 UI will start letting users edit data, so please fix before the Phase 2 tag. Recommendation: create the dir owned by the deploy user, or point backups into `/opt/sf-planner/v2/data/backups/`.
 
 ## 2026-11-01 — Phase 2, step 2: factory page, recipe picker, exports
 
@@ -132,3 +132,7 @@ Still open: `docker02-deploy backup` fails (BLOCKED entry above); not part of Ph
 - Splitting a group re-groups just its buildings with the *other* method at half the distance threshold; merging recomputes rates server-side at save time.
 - The server is stateless during review (the page resends the compact list, a few hundred KB, ~4.5 MB for the 34 MB save) — no upload storage, nothing to clean up.
 - No new tables: `imported_building`/`import_run` from the plan hold the raw buildings and the fingerprint (`summary.digest`).
+
+## 2026-11-01 — BLOCKED resolved; Phase 3 + 4 deploy
+
+- The `docker02-deploy backup` BLOCKED entry (Phase 2 deploy note) is **resolved** by the overseer (history kept above). Deploying the held work now: `backup` (exit status checked) → `pull` → `up` → `status` → page checks on :8043. Result recorded below.
