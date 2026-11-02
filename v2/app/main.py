@@ -61,6 +61,8 @@ from app.factory_routes import router as factory_router  # noqa: E402
 app.include_router(factory_router)
 from app.world_routes import router as world_router  # noqa: E402
 app.include_router(world_router)
+from app.import_routes import router as import_router  # noqa: E402
+app.include_router(import_router)
 app.mount("/static", StaticFiles(directory=str(ROOT / "static")), name="static")
 
 

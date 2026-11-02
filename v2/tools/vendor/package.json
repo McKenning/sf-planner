@@ -1,0 +1,8 @@
+{
+  "name": "sf-planner-vendor-build",
+  "private": true,
+  "description": "Dev-only: builds v2/static/vendor/satisfactory-file-parser.bundle.js. Not a runtime dependency.",
+  "scripts": { "build": "node build.mjs" },
+  "dependencies": { "@etothepii/satisfactory-file-parser": "4.1.2" },
+  "devDependencies": { "esbuild": "0.28.2" }
+}

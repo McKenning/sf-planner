@@ -1,0 +1,3 @@
+@etothepii/satisfactory-file-parser 4.1.2 (MIT)
+bundled with esbuild 0.28.2
+rebuild: cd v2/tools/vendor && npm ci && npm run build
