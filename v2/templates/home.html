@@ -51,7 +51,7 @@
 <h2>Factories</h2>
 {% for f in ov.factories %}
 <section class="card"><h3><a href="/factory/{{ f.id }}">{{ f.name }}</a> <span class="tag">{{ f.status }}</span></h3>
-  <p><strong>{{ f.power_mw|n1 }} MW</strong> · {{ f.machines }} machines · {{ f.sloops }} Somersloops
+  <p><strong>{{ f.power_mw|n2 }} MW</strong> · {{ f.machines }} machines · {{ f.sloops }} Somersloops
   {% for item, r in f.outputs.items() %}<br>{{ name(item) }} {{ rate(r) }}{% endfor %}</p></section>
 {% else %}<p>No factories yet. Start in <a href="/goals">Goals</a> or <a href="/factories">Factories</a>.</p>{% endfor %}
 

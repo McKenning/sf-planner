@@ -52,7 +52,7 @@ def run(vp_name, vp):
         body = pg.inner_text("body")
         exp = o.plan({"Iron Plate": 60})
         check(f"[{tag}] iron plate raw ore", abs((num(body, "Iron Ore") or -1) - exp["raws"]["Iron Ore"]) < 0.011, body[:300])
-        check(f"[{tag}] iron plate power {exp['power_mw']:.2f}", f"{exp['power_mw']:,.1f} MW" in body)
+        check(f"[{tag}] iron plate power {exp['power_mw']:.2f}", f"{exp['power_mw']:,.2f} MW" in body)
         pg.screenshot(path=SHOTS / f"factory-{tag}.png")
         # duplicate output (same item) updates, not duplicates
         pg.fill("input[list=items]", "Iron Plate")
@@ -82,7 +82,7 @@ def run(vp_name, vp):
         body = pg.inner_text("body")
         check(f"[{tag}] after recipe change Iron Ore matches oracle {exp['raws']['Iron Ore']:.2f}",
               abs((num(body, "Iron Ore") or -1) - exp["raws"]["Iron Ore"]) < 0.011, body[:400])
-        check(f"[{tag}] power matches oracle {exp['power_mw']:.1f}", f"{exp['power_mw']:,.1f} MW" in body)
+        check(f"[{tag}] power matches oracle {exp['power_mw']:.1f}", f"{exp['power_mw']:,.2f} MW" in body)
         # ---- clock / sloops via the inline form, valid and invalid ----
         pg.fill("input[list=items]", "Computer")
         pg.fill("form.add input[name=rate]", "9.375")
@@ -95,7 +95,7 @@ def run(vp_name, vp):
         exp = o.plan({"Computer": 9.375}, overrides={"Computer": (250, 2)})
         l = [x for x in exp["lines"] if x["recipe"] == "Computer"][0]
         body = pg.inner_text("body")
-        check(f"[{tag}] Computer 250%/2 sloops -> 1 machine {l['power']:.2f} MW", "1× Manufacturer" in body and f"{l['power']:,.1f} MW" in body, body[:300])
+        check(f"[{tag}] Computer 250%/2 sloops -> 1 machine {l['power']:.2f} MW", "1× Manufacturer" in body and f"{l['power']:,.2f} MW" in body, body[:300])
         # invalid values by disabling browser validation
         for clk, slp, label in (("0", "0", "clock 0"), ("300", "0", "clock 300"), ("100", "9", "sloops 9"), ("100", "-1", "sloops -1"), ("1e999", "0", "clock huge"), ("abc", "0", "clock text")):
             row = pg.locator("table.lines tr", has_text="Computer").filter(has=pg.get_by_label("Clock percent")).first
@@ -153,7 +153,7 @@ def world_flow(vp_name, vp):
         for k, v in exp["raws"].items():
             check(f"[{tag}] goals raw {k} {v:.0f}", abs(raw_rows.get(k, -1) - round(v)) <= 1, f"{raw_rows}")
         txt = pg.inner_text("body")
-        check(f"[{tag}] world power {exp['power_mw']:.1f}", f"{exp['power_mw']:,.1f} MW" in txt)
+        check(f"[{tag}] world power {exp['power_mw']:.1f}", f"{exp['power_mw']:,.2f} MW" in txt)
         pg.screenshot(path=SHOTS / f"goals-{tag}.png", full_page=True)
         # split: assign Smart Plating (with everything below) to a new factory, then Versatile Framework
         def assign(item, name, sub=True):

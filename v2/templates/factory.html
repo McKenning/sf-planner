@@ -14,7 +14,7 @@
 </details>
 
 <section class="strip">
-  <div><span class="label">Power</span><span class="big">{{ res.power_mw|n1 }} MW</span></div>
+  <div><span class="label">Power</span><span class="big">{{ res.power_mw|n2 }} MW</span></div>
   <div><span class="label">Somersloops used</span><span class="big">{{ res.sloops_total }}</span></div>
   <div><span class="label">Machines</span><span class="big">{{ res.lines|sum(attribute='count') }}</span></div>
   <div><span class="label">Raw inputs</span><span class="big">{{ res.raws|length }}</span></div>
@@ -88,7 +88,7 @@
             <tr class="{{ 'cur' if o.current }}">
               <td>{{ o.name }}{% if o.alternate %} <span class="tag">alt</span>{% endif %}</td>
               <td>{{ o.machine }}</td><td class="num">{{ "%.2f"|format(o.machines) }}</td>
-              <td class="num">{{ "%.1f"|format(o.power_mw) }} MW</td>
+              <td class="num">{{ o.power_mw|n2 }} MW</td>
               <td>{% for n, v in o.inputs %}{{ n }} {{ "%.1f"|format(v) }}{% if not loop.last %}, {% endif %}{% endfor %}
                 {% if o.byproducts %}<br><span class="note">also makes: {% for n, v in o.byproducts %}{{ n }} {{ "%.1f"|format(v) }}{% if not loop.last %}, {% endif %}{% endfor %}</span>{% endif %}</td>
               <td>{% if o.current %}<span class="tag">in use</span>{% elif editable %}
@@ -108,7 +108,7 @@
           <button>Apply</button></form>
         <span class="note">Even clock: {{ "%.2f"|format(l.clock_pct) }}%</span></td>
       {% else %}<td>{{ "%.2f"|format(l.clock_pct) }}%</td><td>{{ l.sloops }}</td>{% endif %}
-      <td class="num">{{ "%.1f"|format(l.power_mw) }} MW</td>
+      <td class="num">{{ l.power_mw|n2 }} MW</td>
       <td class="io"><span class="label">In</span> {% for n, v in l.inputs_named %}{{ n }} {{ "%.2f"|format(v) }}{% if not loop.last %}, {% endif %}{% endfor %}
         <br><span class="label">Out</span> {% for n, v in l.outputs_named %}{{ n }} {{ "%.2f"|format(v) }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
     </tr>

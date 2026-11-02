@@ -27,7 +27,7 @@
     <td>{{ "%.0f"|format(b.demand) }} / {{ "unlimited" if b.available == inf else ("%.0f"|format(b.available) if b.available is not none else "not budgeted") }}</td>
     <td>{% if b.over %}<span class="pill bad">OVER BUDGET</span>{% elif b.unbudgeted %}<span class="pill">No budget set</span>{% else %}<span class="pill ok">OK {{ "%.0f"|format(b.pct) }}%</span>{% endif %}</td></tr>{% endif %}{% endfor %}
   </table>
-  <p class="note">World power for this tree: {{ "%.1f"|format(res.power_mw) }} MW · Somersloops {{ res.sloops_total }}</p>
+  <p class="note">World power for this tree: {{ res.power_mw|n2 }} MW · Somersloops {{ res.sloops_total }}</p>
 </section>
 
 <section class="card">
@@ -40,7 +40,7 @@
         <details><summary>Compare / change</summary>
         <table class="cmp"><tr><th>Recipe</th><th>Machine</th><th>Machines</th><th>Power @100%</th><th>Inputs / min</th><th></th></tr>
         {% for o in l.options %}<tr class="{{ 'cur' if o.current }}"><td>{{ o.name }}{% if o.alternate %} <span class="tag">alt</span>{% endif %}</td>
-          <td>{{ o.machine }}</td><td class="num">{{ "%.2f"|format(o.machines) }}</td><td class="num">{{ "%.1f"|format(o.power_mw) }} MW</td>
+          <td>{{ o.machine }}</td><td class="num">{{ "%.2f"|format(o.machines) }}</td><td class="num">{{ o.power_mw|n2 }} MW</td>
           <td>{% for n, v in o.inputs %}{{ n }} {{ "%.1f"|format(v) }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
           <td>{% if o.current %}<span class="tag">in use</span>{% else %}<form method="post" action="/goals/recipe" class="inline"><input type="hidden" name="item" value="{{ l.item }}"><input type="hidden" name="recipe" value="{{ o.recipe }}"><button>Use</button></form>{% endif %}</td></tr>{% endfor %}
         </table></details></td>

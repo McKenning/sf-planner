@@ -12,4 +12,5 @@ def thousands(v, digits: int = 0) -> str:
 def install(templates):
     templates.env.filters["n0"] = thousands
     templates.env.filters["n1"] = lambda v: thousands(v, 1)
+    templates.env.filters["n2"] = lambda v: thousands(v, 2)
     return templates

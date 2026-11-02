@@ -8,7 +8,7 @@
 {% for r in rows %}
 <section class="card">
   <h2><a href="/factory/{{ r.f.id }}">{{ r.f.name }}</a> <span class="tag">{{ r.f.status }}</span> <span class="tag">{{ r.f.origin }}</span></h2>
-  <p class="big">{{ r.power|n1 }} MW <span class="note">· {{ r.machines }} machines · {{ r.sloops }} Somersloops</span></p>
+  <p class="big">{{ r.power|n2 }} MW <span class="note">· {{ r.machines }} machines · {{ r.sloops }} Somersloops</span></p>
   <p class="label">Outputs (items/min)</p>
   {% if r.outputs %}
   <ul>{% for o in r.outputs %}<li>{{ o.item }} — {{ "%.2f"|format(o.rate) }}/min</li>{% endfor %}</ul>
