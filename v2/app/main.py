@@ -57,6 +57,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="SF Planner 2.0", lifespan=lifespan)
+from app.factory_routes import router as factory_router  # noqa: E402
+app.include_router(factory_router)
 app.mount("/static", StaticFiles(directory=str(ROOT / "static")), name="static")
 
 
@@ -101,17 +103,16 @@ def home(request: Request):
 
 @app.get("/factories", response_class=HTMLResponse)
 def factories(request: Request):
+    from app import factory_service as fs
     conn = db.connect()
     try:
         rows = []
         for f in conn.execute("SELECT f.*, w.name AS world FROM factory f JOIN world w ON w.id=f.world_id "
                               "ORDER BY f.status = 'archived', f.name"):
-            outs = [{"item": _name(o["item"]), "rate": o["rate_per_min"]} for o in conn.execute(
-                "SELECT item, rate_per_min FROM factory_output WHERE factory_id=?", (f["id"],))]
-            ovr = [{"item": _name(o["item"]), "recipe": _recipe_name(o["recipe"]),
-                    "clock": o["clock_pct"], "sloops": o["sloops"]} for o in conn.execute(
-                "SELECT * FROM factory_recipe WHERE factory_id=? ORDER BY item", (f["id"],))]
-            rows.append({"f": f, "outputs": outs, "overrides": ovr})
+            outputs, _c, _o, res = fs.solve_factory(conn, f["id"])
+            rows.append({"f": f, "outputs": [{"item": _name(k), "rate": v} for k, v in outputs.items()],
+                         "power": res["power_mw"], "sloops": res["sloops_total"],
+                         "machines": sum(l["count"] for l in res["lines"]), "warnings": res["warnings"]})
     finally:
         conn.close()
     return _render(request, "factories.html", nav="factories", rows=rows)

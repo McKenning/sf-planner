@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}{{ f.name }} — SF Planner 2.0{% endblock %}
+{% block main %}
+<p><a href="/factories">← Factories</a></p>
+<h1>{{ f.name }} <span class="tag">{{ f.status }}</span></h1>
+
+<section class="strip">
+  <div><span class="label">Power</span><span class="big">{{ "%.1f"|format(res.power_mw) }} MW</span></div>
+  <div><span class="label">Somersloops used</span><span class="big">{{ res.sloops_total }}</span></div>
+  <div><span class="label">Machines</span><span class="big">{{ res.lines|sum(attribute='count') }}</span></div>
+  <div><span class="label">Raw inputs</span><span class="big">{{ res.raws|length }}</span></div>
+  <div><span class="label">Outputs</span><span class="big">{{ outputs|length }}</span></div>
+</section>
+
+{% if res.warnings %}
+<section class="card warn"><strong>Warnings</strong><ul>{% for w in res.warnings %}<li>{{ w }}</li>{% endfor %}</ul></section>
+{% endif %}
+{% if not editable %}<p class="note">This factory is archived and read-only.</p>{% endif %}
+
+<section class="card">
+  <h2>Outputs (items per minute)</h2>
+  <table>
+    <tr><th>Item</th><th>Rate / min</th><th></th></tr>
+    {% for o in outputs %}
+    <tr><td>{{ o.name }}</td>
+      <td>{% if editable %}<form method="post" action="/factory/{{ f.id }}/output" class="inline">
+        <input type="hidden" name="item" value="{{ o.name }}">
+        <input type="number" name="rate" value="{{ o.rate }}" step="any" min="0.0001" aria-label="Rate per minute for {{ o.name }}">
+        <button>Update</button></form>{% else %}{{ "%.2f"|format(o.rate) }}{% endif %}</td>
+      <td>{% if editable %}<form method="post" action="/factory/{{ f.id }}/output/delete" class="inline">
+        <input type="hidden" name="item" value="{{ o.item }}"><button class="quiet">Remove</button></form>{% endif %}</td></tr>
+    {% else %}<tr><td colspan="3">No outputs yet — add one below.</td></tr>{% endfor %}
+  </table>
+  {% if editable %}
+  <form method="post" action="/factory/{{ f.id }}/output" class="inline add">
+    <input list="items" name="item" placeholder="Item name" required aria-label="Item">
+    <input type="number" name="rate" placeholder="per min" step="any" min="0.0001" required aria-label="Rate per minute">
+    <button>Add output</button>
+  </form>
+  <datalist id="items">{% for n in item_names %}<option value="{{ n }}">{% endfor %}</datalist>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Raw inputs (per minute)</h2>
+  {% if res.raws %}<table>{% for n, v in res.raws %}<tr><td>{{ n }}</td><td class="num">{{ "%.2f"|format(v) }} / min</td></tr>{% endfor %}</table>
+  {% else %}<p>None.</p>{% endif %}
+  {% if res.surplus %}<p class="label">Byproduct surplus (made but not used)</p>
+  <table>{% for n, v in res.surplus %}<tr><td>{{ n }}</td><td class="num">{{ "%.2f"|format(v) }} / min</td></tr>{% endfor %}</table>{% endif %}
+</section>
+
+<h2>Production lines <span class="note">(raw → final; clock and Somersloops edited inline)</span></h2>
+{% for stage, lines in by_stage|dictsort %}
+<section class="card">
+  <p class="label">Stage {{ stage + 1 }}</p>
+  <table class="lines">
+    <tr><th>Machines</th><th>Makes</th><th>Recipe</th><th>Clock %</th><th>Somersloops each</th><th>Power</th><th>In / Out per min</th></tr>
+    {% for l in lines %}
+    <tr>
+      <td><strong>{{ l.count }}×</strong> {{ l.machine_name }}<br><span class="note">{{ "%.2f"|format(l.machines_exact) }} at 100%</span></td>
+      <td>{{ l.item_names|join(", ") }}</td>
+      <td>{{ l.recipe_name }}
+        <details><summary>Compare recipes</summary>
+          <table class="cmp">
+            <tr><th>Recipe</th><th>Machine</th><th>Machines</th><th>Power @100%</th><th>Inputs / min</th><th></th></tr>
+            {% for o in picker[l.recipe] %}
+            <tr class="{{ 'cur' if o.current }}">
+              <td>{{ o.name }}{% if o.alternate %} <span class="tag">alt</span>{% endif %}</td>
+              <td>{{ o.machine }}</td><td class="num">{{ "%.2f"|format(o.machines) }}</td>
+              <td class="num">{{ "%.1f"|format(o.power_mw) }} MW</td>
+              <td>{% for n, v in o.inputs %}{{ n }} {{ "%.1f"|format(v) }}{% if not loop.last %}, {% endif %}{% endfor %}
+                {% if o.byproducts %}<br><span class="note">also makes: {% for n, v in o.byproducts %}{{ n }} {{ "%.1f"|format(v) }}{% if not loop.last %}, {% endif %}{% endfor %}</span>{% endif %}</td>
+              <td>{% if o.current %}<span class="tag">in use</span>{% elif editable %}
+                <form method="post" action="/factory/{{ f.id }}/override" class="inline">
+                  <input type="hidden" name="item" value="{{ l["items"][0] }}"><input type="hidden" name="recipe" value="{{ o.recipe }}">
+                  <input type="hidden" name="clock_pct" value="{{ l.target_clock_pct if l.target_clock_pct != 100 else '' }}">
+                  <button>Use</button></form>{% endif %}</td>
+            </tr>{% endfor %}
+          </table>
+        </details></td>
+      {% if editable %}
+      <td colspan="2">
+        <form method="post" action="/factory/{{ f.id }}/override" class="inline">
+          <input type="hidden" name="item" value="{{ l["items"][0] }}"><input type="hidden" name="recipe" value="{{ l.recipe }}">
+          <input type="number" name="clock_pct" value="{{ '%g'|format(l.target_clock_pct) }}" step="any" min="1" max="250" aria-label="Clock percent" class="short">
+          <input type="number" name="sloops" value="{{ l.sloops }}" min="0" step="1" aria-label="Somersloops per machine" class="short">
+          <button>Apply</button></form>
+        <span class="note">Even clock: {{ "%.2f"|format(l.clock_pct) }}%</span></td>
+      {% else %}<td>{{ "%.2f"|format(l.clock_pct) }}%</td><td>{{ l.sloops }}</td>{% endif %}
+      <td class="num">{{ "%.1f"|format(l.power_mw) }} MW</td>
+      <td class="io"><span class="label">In</span> {% for n, v in l.inputs_named %}{{ n }} {{ "%.2f"|format(v) }}{% if not loop.last %}, {% endif %}{% endfor %}
+        <br><span class="label">Out</span> {% for n, v in l.outputs_named %}{{ n }} {{ "%.2f"|format(v) }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</section>
+{% else %}<p>No lines — add an output above.</p>{% endfor %}
+
+<p><a class="btn" href="/api/factory/{{ f.id }}/export.xlsx">Export Excel</a> <a class="btn" href="/api/factory/{{ f.id }}/export.json">Export JSON</a></p>
+{% endblock %}

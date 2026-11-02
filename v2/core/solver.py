@@ -151,6 +151,22 @@ def solve(outputs: dict, choices: dict | None = None, overrides: dict | None = N
             "inputs": ins, "outputs": outs,
         })
 
+    # stage: 0 = fed by raws only ... final products last (longest chain from raws; loops capped)
+    maker = {item: l for l in lines for item in l["items"]}
+    for l in lines:
+        l["stage"] = 0
+    for _ in range(len(lines) + 1):
+        changed = False
+        for l in lines:
+            st = 1 + max((maker[i]["stage"] for i in l["inputs"] if i in maker and maker[i] is not l),
+                         default=-1)
+            st = min(st, len(lines))
+            if st > l["stage"]:
+                l["stage"], changed = st, True
+        if not changed:
+            break
+    lines.sort(key=lambda l: (l["stage"], l["recipe_name"]))
+
     raws = {}
     for item in raw_items:
         d = targets.get(item, 0.0) + consumed.get(item, 0.0) - produced.get(item, 0.0)
