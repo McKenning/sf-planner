@@ -1,4 +1,5 @@
 """Save import page + API. Parsing happens in the browser; only the compact building list arrives here."""
+import math
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
@@ -16,10 +17,26 @@ router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
 
 
+def _num(v):
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
 def _valid(payload):
     if not isinstance(payload, dict) or payload.get("format") != 1 or "buildings" not in payload \
             or "links" not in payload:
         raise HTTPException(400, "Not a SF Planner building list (format 1)")
+    B, L = payload["buildings"], payload["links"]
+    if not isinstance(B, list) or not isinstance(L, list):
+        raise HTTPException(400, "buildings and links must be lists")
+    for b in B:
+        if not (isinstance(b, dict) and isinstance(b.get("id"), str) and isinstance(b.get("cls"), str)
+                and isinstance(b.get("kind"), str) and all(_num(b.get(c)) for c in ("x", "y", "z"))):
+            raise HTTPException(400, "Each building needs id, cls, kind (text) and x, y, z (numbers)")
+    n = len(B)
+    for l in L:
+        if not (isinstance(l, (list, tuple)) and len(l) == 3 and all(isinstance(i, int) and 0 <= i < n for i in l[:2])
+                and _num(l[2])):
+            raise HTTPException(400, "Each link must be [building index, building index, length]")
 
 
 def _view(g: dict) -> dict:
@@ -51,9 +68,19 @@ def import_page(request: Request):
     return templates.TemplateResponse(request, "import.html", {"nav": "import", "runs": runs, "factories": factories})
 
 
+async def _body(request: Request) -> dict:
+    try:
+        body = await request.json()
+    except ValueError:
+        raise HTTPException(400, "Body must be JSON")
+    if not isinstance(body, dict):
+        raise HTTPException(400, "Body must be a JSON object")
+    return body
+
+
 @router.post("/api/import/group")
 async def group(request: Request):
-    body = await request.json()
+    body = await _body(request)
     payload = body.get("payload")
     _valid(payload)
     method = body.get("method", "connection")
@@ -64,7 +91,12 @@ async def group(request: Request):
         long_link = float(body.get("long_link", 300))
     except (TypeError, ValueError):
         raise HTTPException(400, "threshold/long_link must be numbers")
-    res = im.build_groups(payload, method, threshold, long_link)
+    if not (math.isfinite(threshold) and threshold > 0 and math.isfinite(long_link) and long_link > 0):
+        raise HTTPException(400, "threshold and long_link must be positive numbers")
+    try:
+        res = im.build_groups(payload, method, threshold, long_link)
+    except (KeyError, TypeError, ValueError, IndexError, ZeroDivisionError) as e:
+        raise HTTPException(400, f"Could not group this building list: {type(e).__name__}")
     flows = im.transport_flows(res)
     names = {g["id"]: g["name"] for g in res["groups"]}
     return JSONResponse({
@@ -79,17 +111,27 @@ async def group(request: Request):
 
 @router.post("/api/import/save")
 async def save(request: Request):
-    body = await request.json()
+    body = await _body(request)
     payload = body.get("payload")
     _valid(payload)
-    groups = body.get("groups") or []
-    if not groups or not all(isinstance(g.get("ids"), list) for g in groups):
-        raise HTTPException(400, "No groups to save")
-    params = dict(body.get("params") or {})
+    groups = body.get("groups")
+    if not isinstance(groups, list) or not groups or not all(
+            isinstance(g, dict) and isinstance(g.get("ids"), list) and g["ids"]
+            and all(isinstance(i, str) for i in g["ids"]) for g in groups):
+        raise HTTPException(400, "No groups to save (each group needs a list of building ids)")
+    params = body.get("params") or {}
+    if not isinstance(params, dict):
+        raise HTTPException(400, "params must be an object")
+    try:
+        params["long_link"] = float(params.get("long_link", 300))
+    except (TypeError, ValueError):
+        raise HTTPException(400, "long_link must be a number")
     conn = db.connect()
     try:
         with conn:
-            result = svc.save(conn, payload, groups, str(body.get("file_name") or "save.sav")[:200], params)
+            result = svc.save(conn, payload, groups, str(body.get("file_name") or "save.sav")[:200], dict(params))
+    except (KeyError, TypeError, ValueError, IndexError, ZeroDivisionError) as e:
+        raise HTTPException(400, f"Could not save this import: {type(e).__name__}")
     finally:
         conn.close()
     return JSONResponse(result)

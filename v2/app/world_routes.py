@@ -6,6 +6,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from app import db
+from app import validate as vd
 from app import factory_service as fs
 from app import world_service as ws
 from app.factory_routes import _item_by_name
@@ -78,8 +79,7 @@ def goals(request: Request):
 
 @router.post("/goals/add")
 def goal_add(item: str = Form(...), rate: float = Form(...)):
-    if rate <= 0:
-        raise HTTPException(400, "Rate must be positive")
+    vd.rate(rate)
     cls = _item_by_name(item)
     conn, wid = _open()
     try:
@@ -94,8 +94,7 @@ def goal_add(item: str = Form(...), rate: float = Form(...)):
 
 @router.post("/goals/power")
 def goal_power(mw: float = Form(...)):
-    if mw <= 0:
-        raise HTTPException(400, "MW must be positive")
+    vd.megawatts(mw)
     conn, wid = _open()
     try:
         with conn:
@@ -144,7 +143,10 @@ def goal_assign(item: str = Form(...), factory_id: str = Form(""), new_name: str
     conn, wid = _open()
     try:
         with conn:
-            fid = int(factory_id) if factory_id.strip() else None
+            try:
+                fid = int(factory_id) if factory_id.strip() else None
+            except ValueError:
+                raise HTTPException(400, "Pick a factory from the list")
             if fid is not None:
                 f = conn.execute("SELECT status FROM factory WHERE id=? AND world_id=?", (fid, wid)).fetchone()
                 if not f or f["status"] == "archived":
@@ -192,11 +194,15 @@ def flow_transport(flow_id: int = Form(...), transport: str = Form("")):
 def flow_add(item: str = Form(...), from_factory: int = Form(...), to_factory: int = Form(...),
              rate: float = Form(...), transport: str = Form("")):
     it = gd.item_by_name(item.strip())
-    if not it or rate <= 0 or from_factory == to_factory or (transport and transport not in TRANSPORTS):
-        raise HTTPException(400, "Check item, rate, factories and transport")
+    if not it or from_factory == to_factory or (transport and transport not in TRANSPORTS):
+        raise HTTPException(400, "Check item, factories and transport")
+    vd.rate(rate)
     conn, wid = _open()
     try:
         with conn:
+            ids = {r["id"] for r in conn.execute("SELECT id FROM factory WHERE world_id=? AND status != 'archived'", (wid,))}
+            if from_factory not in ids or to_factory not in ids:
+                raise HTTPException(400, "Both factories must exist and not be archived")
             conn.execute("INSERT INTO flow(world_id,from_factory,to_factory,item,rate_per_min,transport,auto) "
                          "VALUES (?,?,?,?,?,?,0)", (wid, from_factory, to_factory, it["class"], rate, transport or None))
     finally:
@@ -273,15 +279,18 @@ def resources_page(request: Request):
 @router.post("/resources/update")
 def resources_update(resource: str = Form(...), pure: int = Form(0), normal: int = Form(0), impure: int = Form(0),
                      miner: str = Form(""), clock_pct: float = Form(250)):
-    if min(pure, normal, impure) < 0 or not (1 <= clock_pct <= 250):
-        raise HTTPException(400, "Counts must be >= 0 and clock 1-250 %")
+    for v in (pure, normal, impure):
+        vd.count(v, "Node count")
+    vd.clock(clock_pct)
     if miner and miner not in gd.load()["extractors"]:
         raise HTTPException(400, "Unknown extractor")
     conn, wid = _open()
     try:
         with conn:
-            conn.execute("UPDATE world_resource SET pure=?, normal=?, impure=?, miner=?, clock_pct=? "
-                         "WHERE world_id=? AND resource=?", (pure, normal, impure, miner or None, clock_pct, wid, resource))
+            n = conn.execute("UPDATE world_resource SET pure=?, normal=?, impure=?, miner=?, clock_pct=? "
+                             "WHERE world_id=? AND resource=?", (pure, normal, impure, miner or None, clock_pct, wid, resource)).rowcount
+            if not n:
+                raise HTTPException(404, "Unknown resource")
     finally:
         conn.close()
     return _go("/resources")
@@ -313,8 +322,10 @@ def power_page(request: Request):
 def power_add(name: str = Form(""), generator: str = Form(...), fuel: str = Form(...), count: int = Form(1),
               clock_pct: float = Form(100)):
     g = gd.load()["generators"].get(generator)
-    if not g or not any(f["fuel"] == fuel for f in g["fuels"]) or count < 1 or not (1 <= clock_pct <= 250):
-        raise HTTPException(400, "Check generator, fuel, count (>=1) and clock (1-250 %)")
+    if not g or not any(f["fuel"] == fuel for f in g["fuels"]):
+        raise HTTPException(400, "Check generator and fuel")
+    vd.count(count, "Count", 1)
+    vd.clock(clock_pct)
     conn, wid = _open()
     try:
         with conn:
@@ -327,13 +338,15 @@ def power_add(name: str = Form(""), generator: str = Form(...), fuel: str = Form
 
 @router.post("/power/update")
 def power_update(plant_id: int = Form(...), count: int = Form(...), clock_pct: float = Form(...)):
-    if count < 1 or not (1 <= clock_pct <= 250):
-        raise HTTPException(400, "Count >= 1 and clock 1-250 %")
+    vd.count(count, "Count", 1)
+    vd.clock(clock_pct)
     conn, wid = _open()
     try:
         with conn:
-            conn.execute("UPDATE power_plant SET count=?, clock_pct=? WHERE id=? AND world_id=?",
-                         (count, clock_pct, plant_id, wid))
+            n = conn.execute("UPDATE power_plant SET count=?, clock_pct=? WHERE id=? AND world_id=?",
+                             (count, clock_pct, plant_id, wid)).rowcount
+            if not n:
+                raise HTTPException(404, "Power plant not found")
     finally:
         conn.close()
     return _go("/power")

@@ -4,6 +4,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.templating import Jinja2Templates
 
 from app import db
+from app import validate as vd
 from app import factory_service as fs
 from core import gamedata as gd
 from core import recipes as rc
@@ -83,8 +84,7 @@ def factory_page(request: Request, fid: int):
 
 @router.post("/factory/{fid}/output")
 def set_output(fid: int, item: str = Form(...), rate: float = Form(...)):
-    if rate <= 0:
-        raise HTTPException(400, "Rate must be positive")
+    vd.rate(rate)
     cls = _item_by_name(item)
     conn = db.connect()
     try:
@@ -128,8 +128,8 @@ def set_override(fid: int, item: str = Form(...), recipe: str = Form(""), clock_
         slp = int(sloops) if sloops.strip() else None
     except ValueError:
         raise HTTPException(400, "Clock must be a number and Somersloops a whole number")
-    if clk is not None and not (1 <= clk <= 250):
-        raise HTTPException(400, "Clock must be between 1 and 250 %")
+    if clk is not None:
+        vd.clock(clk)
     if slp is not None:
         rcls = rec or rc.default_recipe(item)
         slots = gd.buildings()[gd.recipes()[rcls]["machine"]]["sloop_slots"]
