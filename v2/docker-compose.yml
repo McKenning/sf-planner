@@ -4,7 +4,7 @@ services:
     container_name: sf-planner-v2
     restart: always
     ports:
-      - "8042:8000"
+      - "127.0.0.1:8042:8000"
     volumes:
       - ./data:/app/data
       # 1.x data directory, read-only: the first start imports from a copy of planner.db

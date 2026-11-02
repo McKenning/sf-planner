@@ -107,7 +107,7 @@ The world view solves each factory and power plant independently, then aggregate
 
 ## SF Planner 2.0 (in `v2/`, in progress)
 
-Fresh rewrite for Satisfactory 1.1, built beside 1.x (which is untouched and still on :8042). Plan: `v2/docs/PLAN.md`; build log: `v2/docs/PROGRESS.md`.
+Fresh rewrite for Satisfactory 1.1, built beside 1.x, which it replaced on 2026-11-01. Live at https://sfplanner.kenningfamily.org. Plan: `v2/docs/PLAN.md`; build log: `v2/docs/PROGRESS.md`.
 
 - Phase 1 (done): game data generated from the game's Docs file (`v2/tools/build_gamedata.py` → `v2/core/gamedata.json`), 1.1 power maths (`v2/core/power.py`), SQLite migrations, 1.x importer, read-only World/Factories/Power pages.
 - Phase 2 (done): solver with byproducts and loops (`v2/core/solver.py`), factory page with inline recipe/clock/Somersloop edits and a recipe comparison, Excel/JSON export; every imported 1.x factory matches 1.x's solver (power differs by design). Parity report: `v2/docs/PARITY-1x-*.md`.
@@ -115,6 +115,6 @@ Fresh rewrite for Satisfactory 1.1, built beside 1.x (which is untouched and sti
 - Phase 4 (done): **Import** page — pick a `.sav`; a Web Worker parses it in the browser (vendored `@etothepii/satisfactory-file-parser` 4.1.2, MIT, in `v2/static/vendor/`) and only a compact building list goes to the server, which groups it by connection and by distance (shown side by side), labels factory/outpost/power, and saves built factories with production lines, power plants and flows. Re-import matches factories by ≥50 % building overlap; an identical save changes nothing. Rebuild the parser bundle (dev only): `cd v2/tools/vendor && npm ci && npm run build`.
 - Runs as container `sf-planner-v2` on host port **8042** since the cutover (`v2/docker-compose.yml`; dev server uses 8043). Dev: `cd v2 && python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt && .venv/bin/pytest`, then `uvicorn app.main:app --port 8043`.
 
-**Operating 2.0** (run, tests, deploy, backup/restore, and how to bring 1.x back from `v1-final` after the cutover): see [`v2/docs/OPERATIONS.md`](v2/docs/OPERATIONS.md). `/health` on :8042 reports the current phase/tag.
+**Operating 2.0** (run, tests, deploy, backup/restore, and how to bring 1.x back from `v1-final` after the cutover): see [`v2/docs/OPERATIONS.md`](v2/docs/OPERATIONS.md). `/health` at https://sfplanner.kenningfamily.org/health reports the current phase/tag.
 
-**Repository layout after the cutover:** 2.0 lives in `v2/` and is what runs on :8042. The old 1.x app is kept in `legacy/` (its `docker-compose.yml` runs from there, data in the repo-root `data/`), and the annotated tag `v1-final` is the last 1.x commit. See the operations guide for bringing 1.x back.
+**Repository layout after the cutover:** 2.0 lives in `v2/` and is what runs at https://sfplanner.kenningfamily.org (docker02 nginx terminates TLS and proxies to the container on 127.0.0.1:8042). The old 1.x app is kept in `legacy/` (its `docker-compose.yml` runs from there, data in the repo-root `data/`), and the annotated tag `v1-final` is the last 1.x commit. See the operations guide for bringing 1.x back.

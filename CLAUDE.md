@@ -4,7 +4,7 @@ You are the **build session** for SF Planner 2.0. The approved plan is `v2/docs/
 
 ## Ground rules
 
-- **2.0 lives in `v2/` and has served docker02 :8042 since the Phase 5 cutover (2026-11-01).** 1.x is retired: its code is in `legacy/` (tag `v1-final`), its data stays in the repo-root `data/` (gitignored). Do not modify `legacy/` or `data/`; bringing 1.x back is documented in `v2/docs/OPERATIONS.md`.
+- **2.0 lives in `v2/` and is live at https://sfplanner.kenningfamily.org (docker02 host nginx, Let's Encrypt cert, proxying to the container on 127.0.0.1:8042 only) since 2026-11-02; cutover from 1.x was 2026-11-01.** 1.x is retired: its code is in `legacy/` (tag `v1-final`), its data stays in the repo-root `data/` (gitignored). Do not modify `legacy/` or `data/`; bringing 1.x back is documented in `v2/docs/OPERATIONS.md`.
 - **Stack:** Python 3.12, FastAPI, Jinja2, SQLite, vanilla JS (ES modules, no frontend build step, no frameworks).
 - **Approved dependencies only:** the existing runtime deps (fastapi, uvicorn, jinja2, python-multipart, openpyxl), pytest (dev only, never in the image), and `@etothepii/satisfactory-file-parser` vendored as a single browser bundle in `v2/static/vendor/` (built once with Node + esbuild on sfdev1; commit the bundle, its version and its MIT licence; Node/esbuild are dev tools, not runtime). **Ask Michael before adding anything else.**
 - **Game data must be accurate to Satisfactory 1.1** (build 25782416). Source of truth: `~/sf-inputs/docs/en-US.json` (UTF-16). Never hand-type recipe numbers; generate them. If unsure of a game mechanic, look it up — don't guess.
@@ -41,7 +41,7 @@ docker02 runs 2.0 as container `sf-planner-v2` on host port **8042** (since the 
 You have one SSH entry point, a forced command — nothing else is possible:
 
 ```
-ssh docker02-deploy status    # container status + /health (still probes :8043 — after the cutover check :8042 yourself)
+ssh docker02-deploy status    # container status + /health (probes 127.0.0.1:8042 on docker02)
 ssh docker02-deploy backup    # dated copy of v2/data/planner2.db (run before any deploy that adds a migration)
 ssh docker02-deploy pull      # git pull --ff-only on docker02
 ssh docker02-deploy up        # docker compose up -d --build in v2/
@@ -50,7 +50,7 @@ ssh docker02-deploy logs      # last 200 log lines of sf-planner-v2
 ssh docker02-deploy seed1x    # stdout: consistent read-only copy of 1.x's planner.db
 ```
 
-Order: push → `backup` (if migration) → `pull` → `up` (deps/Dockerfile changed or first time) or `restart` → `status`. After a deploy, `/health` and every 2.0 page must return 200 from `http://192.168.23.86:8042`. If a deploy breaks, revert the commit, push, pull, restart — then report.
+Order: push → `backup` (if migration) → `pull` → `up` (deps/Dockerfile changed or first time) or `restart` → `status`. After a deploy, `/health` and every 2.0 page must return 200 from `https://sfplanner.kenningfamily.org`. If a deploy breaks, revert the commit, push, pull, restart — then report.
 
 ## Reporting
 

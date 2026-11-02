@@ -31,7 +31,7 @@ ssh docker02-deploy logs
 ```
 
 Order: push → `backup` → `pull` → `up` or `restart` → `status` → check `/health` and every page on
-http://192.168.23.86:8042 (nothing should answer on :8043 any more). Note `ssh docker02-deploy status` still probes :8043, so check `/health` on :8042 yourself. `/health` reports `version`, `tag` and `state` (from `v2/app/version.py`).
+https://sfplanner.kenningfamily.org (nothing should answer on :8043 any more). `ssh docker02-deploy status` probes the container on docker02 (127.0.0.1:8042); from elsewhere use https://sfplanner.kenningfamily.org/health. `/health` reports `version`, `tag` and `state` (from `v2/app/version.py`).
 If a deploy breaks: `git revert` the commit, push, `pull`, `restart`, then report. History is the rollback;
 never force-push `main`.
 
@@ -59,5 +59,14 @@ To bring 1.x back (needs a docker02 shell — ask the overseer; nothing here is 
 2. Start 1.x from `legacy/`: `cd /opt/sf-planner/legacy && docker compose up -d --build`
    (container `ficsit-planner`, port 8042, data from `../data`). Or from the tag:
    `git checkout v1-final` and use the original root layout.
-3. Check `http://192.168.23.86:8042/health`. 1.x data is whatever `data/planner.db` holds (2.0 never writes it).
+3. Check `https://sfplanner.kenningfamily.org/health`. 1.x data is whatever `data/planner.db` holds (2.0 never writes it).
 4. To return to 2.0: stop 1.x, `docker compose up -d` in `v2/`.
+
+## Access, DNS and TLS (2026-11-02)
+
+- URL: **https://sfplanner.kenningfamily.org** (LAN only). AD A record `sfplanner.kenningfamily.org -> 192.168.23.86` (docker02).
+- docker02 host nginx: `/etc/nginx/sites-available/sfplanner` — :80 redirects to :443; :443 terminates TLS (HSTS) and proxies to `127.0.0.1:8042`. `client_max_body_size 32m` for save imports.
+- The container publishes **only on 127.0.0.1:8042** (`v2/docker-compose.yml`), so the app is not reachable on a raw port from the LAN.
+- Certificate: Let's Encrypt via `certbot certonly --dns-cloudflare` (credentials `/etc/letsencrypt/cloudflare.ini`, same Cloudflare token as Parts Hunter, 1Password `Automation / mcp-cloudflare-token`). `certbot.timer` renews; `/etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh` reloads nginx.
+- CSRF guard compares the browser Origin with the Host header; nginx passes `Host` through, so same-site posts via the hostname work.
+

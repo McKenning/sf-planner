@@ -184,3 +184,8 @@ BLOCKED (RESOLVED by overseer: docker02 had an assume-unchanged local edit to th
 - Michael ran his own checks on the live app (http://192.168.23.86:8042): passed.
 - SF Planner 2.0 is complete: phases v2-p1..v2-p5 and QA v2-qa1. No open BLOCKED entries, no open QA defects.
 - Further work starts from a new request in the claude.ai Project; the build session on sfdev1 is idle.
+
+## 2026-11-02 09:15 — hostname, TLS, no raw port (overseer)
+
+- Michael: needs a proper A record, an SSL cert and no raw TCP port. Done the same way as Parts Hunter (wiki 194): AD A record `sfplanner.kenningfamily.org -> 192.168.23.86`; docker02 host nginx with a Let's Encrypt cert (certbot dns-cloudflare); container bound to `127.0.0.1:8042` only. Docs updated to the new URL; see OPERATIONS.md "Access, DNS and TLS".
+
