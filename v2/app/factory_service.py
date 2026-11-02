@@ -61,21 +61,36 @@ def present(res: dict) -> dict:
     }
 
 
+def _n(v: float):
+    """14.0 -> 14, 14.5 stays 14.5 (machine counts are whole numbers; production_line.count is a REAL column)."""
+    return int(round(v)) if abs(v - round(v)) < 1e-9 else round(v, 2)
+
+
 def built_vs_planned(conn, factory_id: int, res: dict) -> list[dict]:
-    """Per recipe: machines planned by the solver vs machines built (from a save import)."""
+    """Per recipe: machines built (from a save import) vs machines the solver plans, compared as *capacity*:
+    an overclocked machine counts clock/100 machines, so 14 Refineries at 195 % are 27.3 machines' worth of
+    work, not 14. Gap = built capacity - planned need (both in machines at 100 % clock)."""
     built = {}
-    for r in conn.execute("SELECT recipe, machine, SUM(count) AS n FROM production_line WHERE factory_id=? "
-                          "GROUP BY recipe, machine", (factory_id,)):
-        built[r["recipe"]] = {"machine": r["machine"], "built": r["n"]}
+    for r in conn.execute("SELECT recipe, machine, SUM(count) AS n, SUM(count * clock_pct) AS cc "
+                          "FROM production_line WHERE factory_id=? GROUP BY recipe, machine", (factory_id,)):
+        built[r["recipe"]] = {"machine": r["machine"], "n": r["n"], "equiv": r["cc"] / 100.0,
+                              "clock": (r["cc"] / r["n"]) if r["n"] else 100.0}
     if not built:
         return []
     rows, planned = [], {l["recipe"]: l for l in res["lines"]}
     for rcls in sorted(set(built) | set(planned), key=lambda x: gd.recipes()[x]["name"]):
         rec = gd.recipes()[rcls]
-        b = built.get(rcls, {}).get("built", 0)
-        p = planned[rcls]["count"] if rcls in planned else 0
+        b = built.get(rcls)
+        pl = planned.get(rcls)
+        have = b["equiv"] if b else 0.0
+        need = pl["machines_exact"] if pl else 0.0
+        gap = have - need
+        if abs(gap) <= max(0.05, 0.005 * need):
+            gap = 0.0
         rows.append({"recipe": rec["name"], "machine": gd.buildings()[rec["machine"]]["name"],
-                     "built": b, "planned": p, "gap": b - p})
+                     "built": _n(b["n"]) if b else 0, "built_clock": b["clock"] if b else None,
+                     "planned": pl["count"] if pl else 0, "planned_clock": pl["clock_pct"] if pl else None,
+                     "have": have, "need": need, "gap": round(gap, 2)})
     return rows
 
 

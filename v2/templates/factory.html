@@ -60,10 +60,12 @@
 
 {% if built %}
 <section class="card">
-  <h2>Built vs planned <span class="note">(machines from the last save import vs what the plan needs)</span></h2>
-  <table><tr><th>Recipe</th><th>Machine</th><th>Built</th><th>Planned</th><th>Gap</th></tr>
-  {% for b in built %}<tr><td>{{ b.recipe }}</td><td>{{ b.machine }}</td><td class="num">{{ b.built }}</td><td class="num">{{ b.planned }}</td>
-    <td class="num">{% if b.gap < 0 %}<span class="pill bad">SHORT {{ -b.gap }}</span>{% elif b.gap > 0 %}<span class="pill">Extra {{ b.gap }}</span>{% else %}<span class="pill ok">Matches</span>{% endif %}</td></tr>{% endfor %}
+  <h2>Built vs planned <span class="note">(machines from the last save import vs what the plan needs; the gap is in machines at 100&nbsp;% clock, so overclocking counts)</span></h2>
+  <table><tr><th>Recipe</th><th>Machine</th><th>Built</th><th>Planned</th><th>Gap (machines at 100&nbsp;%)</th></tr>
+  {% for b in built %}<tr><td>{{ b.recipe }}</td><td>{{ b.machine }}</td>
+    <td class="num">{% if b.built %}{{ b.built }}× at {{ "%.0f"|format(b.built_clock) }}&nbsp;%{% else %}none{% endif %}<br><span class="note">{{ "%.2f"|format(b.have) }} at 100&nbsp;%</span></td>
+    <td class="num">{% if b.planned %}{{ b.planned }}× at {{ "%.0f"|format(b.planned_clock) }}&nbsp;%{% else %}none{% endif %}<br><span class="note">{{ "%.2f"|format(b.need) }} at 100&nbsp;%</span></td>
+    <td class="num">{% if b.gap < 0 %}<span class="pill bad">SHORT {{ "%.2f"|format(-b.gap) }}</span>{% elif b.gap > 0 %}<span class="pill">Extra {{ "%.2f"|format(b.gap) }}</span>{% else %}<span class="pill ok">Matches</span>{% endif %}</td></tr>{% endfor %}
   </table>
 </section>
 {% endif %}

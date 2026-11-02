@@ -63,3 +63,43 @@ def test_inline_clock_form_does_not_revert_recipe_from_other_tab(server):
                                                     "clock_pct": "150", "sloops": ""})[0] == 303
     page = server.get(f"/factory/{fid}")[1]
     assert "Alternate: Bolted Iron Plate" in page
+
+
+def test_built_vs_planned_is_clock_and_recipe_aware(conn):
+    """QA-10: 2 constructors at 250 % making plates from an alternate ingot recipe in a foundry used to read
+    'SHORT' (planner used default recipes and ignored clocks). The created factory now plans what was built."""
+    from app import factory_service as fs
+    from core import gamedata as gd
+    alt = gd.recipe_by_name("Alternate: Iron Alloy Ingot")
+    assert alt and alt["machine"] == "Build_FoundryMk1_C"
+    alt_cls = next(k for k, v in gd.recipes().items() if v is alt)
+    B = [machine(0, 0, 0, clock=2.5), machine(1, 10, 0, clock=2.5),
+         machine(2, 20, 0, alt_cls, "Build_FoundryMk1_C", clock=1.0),
+         machine(3, 30, 0, alt_cls, "Build_FoundryMk1_C", clock=1.0)]
+    p = {"format": 1, "game": {"saveName": "q"}, "buildings": B, "links": [[0, 1, 5], [1, 2, 5], [2, 3, 5]]}
+    gs, _ = specs(p)
+    with conn:
+        assert svc.save(conn, p, gs, "q.sav", {})["created"] == 1
+    fid = conn.execute("select id from factory where origin='import'").fetchone()[0]
+    _o, _c, _ov, sol = fs.solve_factory(conn, fid)
+    rows = {r["recipe"]: r for r in fs.built_vs_planned(conn, fid, sol)}
+    plates = rows["Iron Plate"]
+    assert plates["built"] == 2 and plates["planned"] == 2 and plates["gap"] == 0
+    assert plates["have"] == pytest.approx(5.0) and plates["need"] == pytest.approx(5.0)
+    assert all(r["gap"] == 0 for r in rows.values()), rows
+    # integer machine counts, not 2.0
+    assert isinstance(plates["built"], int)
+
+
+def test_built_vs_planned_reports_a_real_shortfall(conn):
+    from app import factory_service as fs
+    p = synthetic()
+    gs, _ = specs(p)
+    with conn:
+        svc.save(conn, p, gs, "a.sav", {})
+    fid = conn.execute("select factory_id from production_line where recipe='Recipe_IronPlate_C'").fetchone()[0]
+    with conn:   # the user now wants 100 plates/min instead of the 60 that were built
+        conn.execute("UPDATE factory_output SET rate_per_min=100 WHERE factory_id=? AND item='Desc_IronPlate_C'", (fid,))
+    _o, _c, _ov, sol = fs.solve_factory(conn, fid)
+    rows = {r["recipe"]: r for r in fs.built_vs_planned(conn, fid, sol)}
+    assert rows["Iron Plate"]["gap"] == pytest.approx(-2.0)      # 3 built, 5 needed

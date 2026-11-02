@@ -37,6 +37,22 @@ def latest_run_buildings(conn, world_id: int):
     return out
 
 
+def _seed_plan_from_built(conn, fid: int, lines: list[dict]) -> None:
+    """A newly imported factory starts with a plan that uses the recipes and clocks it was built with, so
+    'built vs planned' shows real gaps instead of 'you used different recipes than the defaults'.
+    Only on creation: later re-imports and attached planned factories keep whatever the user set."""
+    best = {}
+    for l in lines:
+        cur = best.get(l["item"])
+        if cur is None or l["count"] > cur["count"]:
+            best[l["item"]] = l
+    for item, l in best.items():
+        slots = gd.buildings()[l["machine"]]["sloop_slots"]
+        clock = None if abs(l["clock_pct"] - 100) < 1e-9 else min(250.0, max(1.0, l["clock_pct"]))
+        conn.execute("INSERT OR REPLACE INTO factory_recipe(factory_id,item,recipe,clock_pct,sloops) VALUES (?,?,?,?,?)",
+                     (fid, item, l["recipe"], clock, min(l["sloops"], slots) or None))
+
+
 def save(conn, payload: dict, groups: list[dict], file_name: str, params: dict) -> dict:
     """groups: [{ids:[building ids], name, label, attach_factory_id|None}]. One transaction by caller."""
     wid = ws.world_id(conn)
@@ -88,7 +104,9 @@ def save(conn, payload: dict, groups: list[dict], file_name: str, params: dict) 
                     if best[0] >= 0.5:
                         fid = best[1]
                         stats["updated"] += 1
+                created_now = False
                 if fid is None:
+                    created_now = True
                     s = d["summary"]
                     note = f"Imported from {file_name} ({label})."
                     fid = conn.execute(
@@ -105,6 +123,8 @@ def save(conn, payload: dict, groups: list[dict], file_name: str, params: dict) 
                     conn.execute("INSERT INTO production_line(factory_id,item,recipe,machine,count,clock_pct,sloops) "
                                  "VALUES (?,?,?,?,?,?,?)", (fid, l["item"], l["recipe"], l["machine"], l["count"],
                                                             l["clock_pct"], l["sloops"]))
+                if created_now:
+                    _seed_plan_from_built(conn, fid, d["lines"])
         for i in d["members"]:
             b = B[i]
             if b["kind"] in ("machine", "extractor", "generator", "station"):
