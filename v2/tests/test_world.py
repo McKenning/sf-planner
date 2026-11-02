@@ -111,3 +111,9 @@ def test_route_validation(conn, monkeypatch):
         wr.resources_update(c("Iron Ore"), 1, 1, 1, "", 900)
     with pytest.raises(HTTPException):
         wr.flow_add("Iron Plate", 1, 1, 5, "")   # same factory both ends
+
+
+def test_health_reports_tag():
+    from app import main, version
+    h = main.health()
+    assert h["tag"] == version.TAG and h["version"] == version.VERSION and h["state"]

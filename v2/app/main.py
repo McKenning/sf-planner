@@ -85,7 +85,9 @@ def health():
         conn.execute("SELECT 1").fetchone()
     finally:
         conn.close()
-    return {"status": "ok", "version": "2.0-p1", "game_build": gd.load()["build"]}
+    from app import version
+    return {"status": "ok", "version": version.VERSION, "tag": version.TAG, "state": version.STATE,
+            "game_build": gd.load()["build"]}
 
 
 def _render(request, name, **ctx):

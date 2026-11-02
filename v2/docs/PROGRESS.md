@@ -149,3 +149,9 @@ BLOCKED: Phase 5 cutover of 1.x — please confirm (Michael/overseer) and note t
 - **Rollback:** `git checkout v1-final` + `docker compose up -d` in the old layout; 1.x's `data/planner.db` is never modified.
 - **Why I'm stuck on step 2/4 regardless of the answer:** the deploy entry point (`docker02-deploy`) only offers status/backup/pull/up/restart/logs/seed1x and runs compose inside `v2/` — it cannot stop or remove the `ficsit-planner` container, and moving `backend/`+`frontend/` while that container (which bind-mounts them) is running would break it mid-flight. Needs a new forced-command verb (e.g. `cutover`: `docker compose -f /opt/sf-planner/docker-compose.yml down` then restart v2 on 8042) or someone running those two commands on docker02. Recommendation: add a one-shot `cutover` verb, then I run steps 1–6 in order and report.
 - Also changes **port/exposure** (8042 now served by 2.0; 8043 retired), which is why this is blocked rather than decided.
+
+## 2026-11-01 — /health version + operations docs (waiting for the cutover decision)
+
+- `/health` now reports `version` (`2.0-p4`), `tag` (`v2-p4`, the last tagged phase) and `state` from `v2/app/version.py` (update it with each phase tag); test added.
+- New `v2/docs/OPERATIONS.md`: run locally, tests (incl. the 3.12 image runner), deploy order with `backup`, rollback by revert, database backup/restore, starting from scratch, and how 1.x comes back — untouched and live today; after the cutover via the `v1-final` tag. README links to it. The restore procedure needs a docker02 shell (no verb for it), so it names the overseer.
+- Per the overseer: the cutover is with Michael; I have not started it and added nothing to `docker02-deploy`. If approved, the overseer stops 1.x and tells me to move 2.0 to :8042. Stopping here after this deploy.
