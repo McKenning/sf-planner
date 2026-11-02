@@ -7,6 +7,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -57,6 +60,34 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="SF Planner 2.0", lifespan=lifespan)
+
+
+def _wants_html(request: Request) -> bool:
+    return "text/html" in request.headers.get("accept", "")
+
+
+def _error_page(request: Request, status: int, message: str):
+    ref = request.headers.get("referer", "")
+    host = request.headers.get("host", "")
+    back = ref if ref and f"//{host}/" in ref + "/" else "/"
+    return templates.TemplateResponse(request, "error.html", {"nav": "", "status": status, "message": message,
+                                                              "back": back}, status_code=status)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_error(request: Request, exc: StarletteHTTPException):
+    if _wants_html(request):
+        return _error_page(request, exc.status_code, str(exc.detail))
+    return await http_exception_handler(request, exc)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request: Request, exc: RequestValidationError):
+    if _wants_html(request):
+        fields = sorted({str(e["loc"][-1]) for e in exc.errors() if e.get("loc")})
+        return _error_page(request, 422, "Check the form: " + (", ".join(fields) or "a value") + " is missing or not valid.")
+    return await request_validation_exception_handler(request, exc)
+
 from app.factory_routes import router as factory_router  # noqa: E402
 app.include_router(factory_router)
 from app.world_routes import router as world_router  # noqa: E402

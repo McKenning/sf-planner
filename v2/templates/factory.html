@@ -3,6 +3,15 @@
 {% block main %}
 <p><a href="/factories">← Factories</a></p>
 <h1>{{ f.name }} <span class="tag">{{ f.status }}</span></h1>
+<details class="manage"><summary>Rename or archive</summary>
+  {% if editable %}
+  <form method="post" action="/factory/{{ f.id }}/rename" class="inline"><input name="name" value="{{ f.name }}" required maxlength="120" aria-label="Factory name"><button>Rename</button></form>
+  <form method="post" action="/factory/{{ f.id }}/archive" class="inline"><button class="quiet">Archive</button></form>
+  <span class="note">Archiving keeps everything but makes the factory read-only and removes it from world totals. You can restore it.</span>
+  {% else %}
+  <form method="post" action="/factory/{{ f.id }}/restore" class="inline"><button>Restore</button></form>
+  {% endif %}
+</details>
 
 <section class="strip">
   <div><span class="label">Power</span><span class="big">{{ "%.1f"|format(res.power_mw) }} MW</span></div>

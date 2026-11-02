@@ -74,3 +74,47 @@ def test_import_api_bad_payloads(server):
                  {"payload": ok, "groups": "x"}, {"payload": ok}):
         assert server.req("POST", "/api/import/save", body=body)[0] == 400, body
     assert server.req("POST", "/api/import/group", body=None, form={"x": "1"})[0] in (400, 415, 422)
+
+
+def test_browser_requests_get_an_html_error_page_api_gets_json(server):
+    fid = server.new_factory("err")
+    import urllib.request, urllib.parse, urllib.error
+    def post(accept):
+        r = urllib.request.Request(server.base + f"/factory/{fid}/output", data=urllib.parse.urlencode(
+            {"item": "Nope", "rate": "5"}).encode(), headers={"Accept": accept}, method="POST")
+        try:
+            urllib.request.urlopen(r)
+        except urllib.error.HTTPError as e:
+            return e.code, e.headers.get("content-type", ""), e.read().decode()
+    st, ct, body = post("text/html,application/xhtml+xml")
+    assert st == 400 and "text/html" in ct and "Unknown or unproducible item" in body and "Go back" in body
+    st, ct, body = post("*/*")
+    assert st == 400 and "json" in ct and '"detail"' in body
+    st, ct, body = post("text/html")  # 422 path: missing field
+    r = urllib.request.Request(server.base + f"/factory/{fid}/output", data=b"item=Iron+Plate", headers={"Accept": "text/html"}, method="POST")
+    try:
+        urllib.request.urlopen(r)
+    except urllib.error.HTTPError as e:
+        assert e.code == 422 and "text/html" in e.headers["content-type"] and "rate" in e.read().decode()
+
+
+def test_archive_restore_rename_and_read_only(server):
+    fid = server.new_factory("arch")
+    assert server.post(f"/factory/{fid}/output", {"item": "Iron Plate", "rate": "60"})[0] == 303
+    assert server.post(f"/factory/{fid}/rename", {"name": "  New   name  "})[0] == 303
+    assert "New name" in server.get(f"/factory/{fid}")[1]
+    assert server.post(f"/factory/{fid}/rename", {"name": "x" * 121})[0] == 400
+    assert server.post(f"/factory/{fid}/rename", {"name": "   "})[0] == 400
+    assert server.post(f"/factory/{fid}/archive")[0] == 303
+    page = server.get(f"/factory/{fid}")[1]
+    assert "archived and read-only" in page and 'action="/factory/%d/output"' % fid not in page
+    for path, form in ((f"/factory/{fid}/output", {"item": "Iron Plate", "rate": "5"}),
+                       (f"/factory/{fid}/output/delete", {"item": "Desc_IronPlate_C"}),
+                       (f"/factory/{fid}/override", {"item": "Desc_IronPlate_C", "clock_pct": "150"}),
+                       (f"/factory/{fid}/rename", {"name": "nope"})):
+        assert server.post(path, form)[0] == 409, path
+    assert server.post(f"/factory/{fid}/restore")[0] == 303
+    assert "archived and read-only" not in server.get(f"/factory/{fid}")[1]
+    assert server.post(f"/factory/{fid}/output", {"item": "Iron Plate", "rate": "5"})[0] == 303
+    assert server.post("/factory/99999/archive")[0] == 404
+    assert server.post("/api/factories", {"name": "y" * 500})[0] == 400

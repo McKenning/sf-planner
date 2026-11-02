@@ -34,15 +34,22 @@ def _item_by_name(n: str) -> str:
     return it["class"]
 
 
+def _clean_name(name: str) -> str:
+    name = " ".join(name.split())
+    if not name:
+        raise HTTPException(400, "Name required")
+    if len(name) > 120:
+        raise HTTPException(400, "Name must be 120 characters or fewer")
+    return name
+
+
 def _back(fid):
     return RedirectResponse(f"/factory/{fid}", status_code=303)
 
 
 @router.post("/api/factories")
 def create_factory(name: str = Form(...)):
-    name = name.strip()
-    if not name:
-        raise HTTPException(400, "Name required")
+    name = _clean_name(name)
     conn = db.connect()
     try:
         with conn:
@@ -51,6 +58,51 @@ def create_factory(name: str = Form(...)):
                                                  (gd.load()["build"],)).lastrowid
             fid = conn.execute("INSERT INTO factory(world_id, name, status, origin) VALUES (?,?, 'planned','manual')",
                                (wid, name)).lastrowid
+    finally:
+        conn.close()
+    return _back(fid)
+
+
+@router.post("/factory/{fid}/rename")
+def rename_factory(fid: int, name: str = Form(...)):
+    name = _clean_name(name)
+    conn = db.connect()
+    try:
+        with conn:
+            _editable(_factory(conn, fid))
+            conn.execute("UPDATE factory SET name=? WHERE id=?", (name, fid))
+    finally:
+        conn.close()
+    return _back(fid)
+
+
+@router.post("/factory/{fid}/archive")
+def archive_factory(fid: int):
+    """Archiving is reversible: the factory keeps all its data, becomes read-only and leaves the world totals."""
+    conn = db.connect()
+    try:
+        with conn:
+            f = _factory(conn, fid)
+            if f["status"] != "archived":
+                conn.execute("UPDATE factory SET status='archived', notes=COALESCE(notes,'') || ? WHERE id=?",
+                             (f" [archived from {f['status']}]", fid))
+    finally:
+        conn.close()
+    return _back(fid)
+
+
+@router.post("/factory/{fid}/restore")
+def restore_factory(fid: int):
+    import re
+    conn = db.connect()
+    try:
+        with conn:
+            f = _factory(conn, fid)
+            if f["status"] == "archived":
+                m = re.findall(r"\[archived from (\w+)\]", f["notes"] or "")
+                prev = m[-1] if m and m[-1] in EDITABLE else "planned"
+                notes = re.sub(r"\s*\[archived from \w+\]", "", f["notes"] or "")
+                conn.execute("UPDATE factory SET status=?, notes=? WHERE id=?", (prev, notes, fid))
     finally:
         conn.close()
     return _back(fid)

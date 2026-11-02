@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}{{ status }} — SF Planner 2.0{% endblock %}
+{% block main %}
+<h1>{% if status == 404 %}Not found{% else %}That didn't work{% endif %}</h1>
+<section class="card warn"><p><strong>{{ message }}</strong></p>
+<p class="note">Nothing was changed.</p></section>
+<p><a class="btn" href="{{ back }}">Go back</a> <a href="/">World</a></p>
+{% endblock %}
