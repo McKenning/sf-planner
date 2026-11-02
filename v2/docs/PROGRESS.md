@@ -178,3 +178,9 @@ BLOCKED (RESOLVED by overseer: docker02 had an assume-unchanged local edit to th
 - Browser groups run one at a time: `ui_qa.py` 84/84 (test fixes: thousands separators, navigation race, expected 400s); `ui_import_qa.py mk` 10/10, then `m1` alone 3/3 (new `mk|m1|all` argument; peak ~2.7 GB). Oracle: fixed item filter for ammo descriptors, ignore < 0.011/min noise in the import checker; MK and M1-8m imports match the independent save reader.
 - Deployed to docker02: `backup` (planner2-20261102-070606.db) → `pull` → `restart` → `status`; all pages, exports and `/health` 200 on :8042; a cross-site POST is refused 403 (nothing written). Live data untouched (read-only checks only).
 - Result: 15 findings, all fixed; see `v2/docs/QA.md`. Tagged `v2-qa1`.
+
+## 2026-11-02 09:03 — Michael hands-on QA passed; project complete (overseer)
+
+- Michael ran his own checks on the live app (http://192.168.23.86:8042): passed.
+- SF Planner 2.0 is complete: phases v2-p1..v2-p5 and QA v2-qa1. No open BLOCKED entries, no open QA defects.
+- Further work starts from a new request in the claude.ai Project; the build session on sfdev1 is idle.
