@@ -207,13 +207,13 @@ def world_flow(vp_name, vp):
         row = pg.locator("tr", has_text=f"QA nuke {tag}")
         e = o.generator("Build_GeneratorNuclear_C", "Uranium Fuel Rod", 4, 100, 50)
         t = row.inner_text()
-        check(f"[{tag}] nuclear plant 10000 MW row", "10000" in t and "0.20" not in t or True, t)
+        check(f"[{tag}] nuclear plant 10000 MW row", "10,000" in t, t)
         check(f"[{tag}] nuclear fuel {e['fuel_per_min']:.2f}, water {e['water_m3_per_min']:.1f}, waste {e['waste_per_min']:.1f}",
               f"{e['fuel_per_min']:.2f}" in t and f"{e['water_m3_per_min']:.1f}" in t and f"{e['waste_per_min']:.1f}" in t, t)
         row.locator("input[name=count]").fill("5")
         row.get_by_role("button", name="Save").click()
         pg.wait_for_load_state()
-        check(f"[{tag}] plant update", "12500" in pg.locator("tr", has_text=f"QA nuke {tag}").inner_text())
+        check(f"[{tag}] plant update", "12,500" in pg.locator("tr", has_text=f"QA nuke {tag}").inner_text())
         pg.locator("tr", has_text=f"QA nuke {tag}").get_by_role("button", name="Remove").click()
         pg.wait_for_load_state()
         check(f"[{tag}] plant removed", f"QA nuke {tag}" not in pg.inner_text("body"))
@@ -223,8 +223,8 @@ def world_flow(vp_name, vp):
         pg.fill("#q", "Iron Pla")
         pg.wait_for_timeout(700)
         check(f"[{tag}] Ctrl+K finds Iron Plate", "Iron Plate" in pg.locator("#results").inner_text())
-        pg.keyboard.press("Enter")
-        pg.wait_for_load_state()
+        with pg.expect_navigation():
+            pg.keyboard.press("Enter")
         check(f"[{tag}] search result opens item page", "/item/" in pg.url or "/recipe/" in pg.url or "/factory/" in pg.url, pg.url)
         pg.goto(f"{BASE}/")
         for want in ("light", "dark", "system"):
@@ -239,7 +239,8 @@ def world_flow(vp_name, vp):
         check(f"[{tag}] archived factory is read-only (no edit forms)", "read-only" in body and pg.locator("form[action$='/output']").count() == 0 and pg.locator("form[action$='/override']").count() == 0)
         pg.goto(f"{BASE}/")
         check(f"[{tag}] archived factory leaves world totals", f"QA Plating {tag}" not in pg.locator("h3").all_inner_texts().__str__() or True)
-        check(f"[{tag}] world/goal pages: no console errors", not errs, str(errs[:3]))
+        real = [e for e in errs if "status of 400" not in e]   # the invalid-value posts above are meant to be refused with 400
+        check(f"[{tag}] world/goal pages: no console errors", not real, str(real[:3]))
         b.close()
 
 
