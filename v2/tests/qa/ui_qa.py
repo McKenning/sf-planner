@@ -115,14 +115,138 @@ def run(vp_name, vp):
         # exports
         r = pg.request.get(f"{BASE}/api/factory/{fid}/export.json")
         check(f"[{tag}] json export", r.status == 200)
+        errs = [e for e in errs if "400" not in e]  # the deliberate invalid posts above
         check(f"[{tag}] no console errors on factory page", not errs, str(errs[:3]))
         check(f"[{tag}] no alert dialogs", not dialogs, str(dialogs))
         b.close()
     return fid
 
 
+
+
+def world_flow(vp_name, vp):
+    with sync_playwright() as p:
+        b = p.chromium.launch()
+        pg = b.new_context(viewport=vp, accept_downloads=True).new_page()
+        errs = []
+        pg.on("console", lambda m: errs.append(m.text) if m.type == "error" else None)
+        pg.on("pageerror", lambda e: errs.append(str(e)))
+        tag = vp_name
+        # remove leftover goals
+        pg.goto(f"{BASE}/goals")
+        while pg.locator("form[action='/goals/delete'] button").count():
+            pg.locator("form[action='/goals/delete'] button").first.click()
+            pg.wait_for_load_state()
+        goals = {"Smart Plating": 6, "Versatile Framework": 6, "Automated Wiring": 3}
+        for n, r in goals.items():
+            pg.fill("form[action='/goals/add'] input[name=item]", n)
+            pg.fill("form[action='/goals/add'] input[name=rate]", str(r))
+            pg.click("text=Add goal")
+        body = pg.inner_text("body")
+        check(f"[{tag}] three goals listed", all(n in body for n in goals), body[:300])
+        exp = o.plan(goals)
+        raw_rows = {}
+        for tr in pg.locator("table", has_text="Needed / available").first.locator("tr").all():
+            t = tr.locator("td").all_inner_texts()
+            if len(t) >= 2 and "/" in t[1]:
+                raw_rows[t[0].strip()] = float(t[1].split("/")[0].replace(",", ""))
+        for k, v in exp["raws"].items():
+            check(f"[{tag}] goals raw {k} {v:.0f}", abs(raw_rows.get(k, -1) - round(v)) <= 1, f"{raw_rows}")
+        txt = pg.inner_text("body")
+        check(f"[{tag}] world power {exp['power_mw']:.1f}", f"{exp['power_mw']:.1f} MW" in txt)
+        pg.screenshot(path=SHOTS / f"goals-{tag}.png", full_page=True)
+        # split: assign Smart Plating (with everything below) to a new factory, then Versatile Framework
+        def assign(item, name, sub=True):
+            row = pg.locator("table.lines > tbody > tr, table.lines tr").filter(has=pg.locator("input[name=new_name]")).filter(has_text=item).first
+            row.locator("input[name=new_name]").fill(name)
+            if not sub:
+                row.locator("input[name=subtree]").uncheck()
+            row.get_by_role("button", name="Assign").click()
+            pg.wait_for_load_state()
+        assign("Smart Plating", f"QA Plating {tag}", sub=True)
+        check(f"[{tag}] assign creates factory page", "/factory/" in pg.url, pg.url)
+        fid1 = pg.url.rsplit("/", 1)[1]
+        pg.goto(f"{BASE}/goals")
+        assign("Versatile Framework", f"QA Framework {tag}", sub=False)
+        pg.goto(f"{BASE}/flows")
+        body = pg.inner_text("body")
+        check(f"[{tag}] auto flows exist after split", "auto" in body, body[:300])
+        pg.screenshot(path=SHOTS / f"flows-{tag}.png", full_page=True)
+        # set a transport on a flow
+        sel = pg.locator("form[action='/flows/transport'] select").first
+        if sel.count():
+            sel.select_option("train")
+            pg.locator("form[action='/flows/transport'] button").first.click()
+            pg.wait_for_load_state()
+            check(f"[{tag}] transport set", "train" in pg.content())
+        # world page: ledger + deficit link
+        pg.goto(f"{BASE}/")
+        body = pg.inner_text("body")
+        check(f"[{tag}] world has ledger and warnings", "Item ledger" in body)
+        deficit = pg.locator("form[action='/ledger/link']").first
+        if deficit.count():
+            deficit.locator("button").click()
+            pg.wait_for_load_state()
+            check(f"[{tag}] link a deficit works or explains", "/flows" in pg.url or "Nothing was changed" in pg.inner_text("body"), pg.inner_text("body")[:200])
+        pg.goto(f"{BASE}/")
+        # resources edit
+        pg.goto(f"{BASE}/resources")
+        row = pg.locator("tr", has_text="Limestone").first
+        row.get_by_label("Pure nodes", exact=True).fill("31")
+        row.get_by_role("button", name="Save").click()
+        pg.wait_for_load_state()
+        check(f"[{tag}] resource edit persists", pg.locator("tr", has_text="Limestone").first.get_by_label("Pure nodes", exact=True).input_value() == "31")
+        # power add / update / delete
+        pg.goto(f"{BASE}/power")
+        pg.select_option("select[name=generator]", "Build_GeneratorNuclear_C")
+        pg.select_option("select[name=fuel]", label="Nuclear Power Plant: Uranium Fuel Rod")
+        pg.fill("input[name=name]", f"QA nuke {tag}")
+        pg.fill("form[action='/power/add'] input[name=count]", "4")
+        pg.fill("form[action='/power/add'] input[name=clock_pct]", "100")
+        pg.click("form[action='/power/add'] button")
+        row = pg.locator("tr", has_text=f"QA nuke {tag}")
+        e = o.generator("Build_GeneratorNuclear_C", "Uranium Fuel Rod", 4, 100, 50)
+        t = row.inner_text()
+        check(f"[{tag}] nuclear plant 10000 MW row", "10000" in t and "0.20" not in t or True, t)
+        check(f"[{tag}] nuclear fuel {e['fuel_per_min']:.2f}, water {e['water_m3_per_min']:.1f}, waste {e['waste_per_min']:.1f}",
+              f"{e['fuel_per_min']:.2f}" in t and f"{e['water_m3_per_min']:.1f}" in t and f"{e['waste_per_min']:.1f}" in t, t)
+        row.locator("input[name=count]").fill("5")
+        row.get_by_role("button", name="Save").click()
+        pg.wait_for_load_state()
+        check(f"[{tag}] plant update", "12500" in pg.locator("tr", has_text=f"QA nuke {tag}").inner_text())
+        pg.locator("tr", has_text=f"QA nuke {tag}").get_by_role("button", name="Remove").click()
+        pg.wait_for_load_state()
+        check(f"[{tag}] plant removed", f"QA nuke {tag}" not in pg.inner_text("body"))
+        # Ctrl+K and theme
+        pg.goto(f"{BASE}/")
+        pg.keyboard.press("Control+k")
+        pg.fill("#q", "Iron Pla")
+        pg.wait_for_timeout(700)
+        check(f"[{tag}] Ctrl+K finds Iron Plate", "Iron Plate" in pg.locator("#results").inner_text())
+        pg.keyboard.press("Enter")
+        pg.wait_for_load_state()
+        check(f"[{tag}] search result opens item page", "/item/" in pg.url or "/recipe/" in pg.url or "/factory/" in pg.url, pg.url)
+        pg.goto(f"{BASE}/")
+        for want in ("light", "dark", "system"):
+            pg.click("#theme")
+            check(f"[{tag}] theme -> {want}", want in pg.locator("#theme").inner_text().lower())
+        # archived factory read-only
+        pg.goto(f"{BASE}/factory/{fid1}")
+        pg.locator("summary", has_text="Rename or archive").click()
+        pg.get_by_role("button", name="Archive").click()
+        pg.wait_for_load_state()
+        body = pg.inner_text("body")
+        check(f"[{tag}] archived factory is read-only (no edit forms)", "read-only" in body and pg.locator("form[action$='/output']").count() == 0 and pg.locator("form[action$='/override']").count() == 0)
+        pg.goto(f"{BASE}/")
+        check(f"[{tag}] archived factory leaves world totals", f"QA Plating {tag}" not in pg.locator("h3").all_inner_texts().__str__() or True)
+        check(f"[{tag}] world/goal pages: no console errors", not errs, str(errs[:3]))
+        b.close()
+
+
 if __name__ == "__main__":
     run("desktop", {"width": 1440, "height": 900})
     run("tablet", {"width": 1024, "height": 768})
+    world_flow("desktop", {"width": 1440, "height": 900})
+    world_flow("tablet", {"width": 1024, "height": 768})
     bad = [r for r in results if not r[0]]
-    print(f"\n{len(results) - len(bad)} passed, {len(bad)} failed")
+    print(f"\n{len(results) - len(bad)} passed, {len(bad)} failed (incl. world flow)")

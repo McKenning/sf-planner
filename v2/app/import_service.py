@@ -41,10 +41,15 @@ def save(conn, payload: dict, groups: list[dict], file_name: str, params: dict) 
     """groups: [{ids:[building ids], name, label, attach_factory_id|None}]. One transaction by caller."""
     wid = ws.world_id(conn)
     dg = digest(payload)
+    # what the reviewer chose: which buildings go to which group, with what type and attach target.
+    # (names are cosmetic and do not count). Same save + same choices = nothing to do.
+    spec = sorted((sorted(g["ids"]), g.get("label") or "", g.get("attach_factory_id") or 0) for g in groups)
+    gdg = hashlib.sha256(json.dumps(spec).encode()).hexdigest()
     last = conn.execute("SELECT summary FROM import_run WHERE world_id=? ORDER BY id DESC LIMIT 1", (wid,)).fetchone()
     if last and last["summary"]:
         try:
-            if json.loads(last["summary"]).get("digest") == dg:
+            ls = json.loads(last["summary"])
+            if ls.get("digest") == dg and ls.get("groups_digest") in (None, gdg):
                 return {"unchanged": True, "message": "This save is identical to the last import — nothing changed."}
         except ValueError:
             pass
@@ -57,8 +62,11 @@ def save(conn, payload: dict, groups: list[dict], file_name: str, params: dict) 
     used_factories, gid_to_factory, described = set(), {}, []
     for n, g in enumerate(groups):
         idx = sorted(by_id[i] for i in g["ids"] if i in by_id)
-        d = describe(payload, idx, g.get("label"))
-        d["name"], d["spec"] = (g.get("name") or f"Area {n + 1}").strip(), g
+        label = g.get("label")
+        if label is not None and label not in TEXT_LABELS:
+            raise ValueError(f"unknown label {label!r}")
+        d = describe(payload, idx, label)
+        d["name"], d["spec"] = " ".join(str(g.get("name") or f"Area {n + 1}").split())[:120] or f"Area {n + 1}", g
         described.append(d)
     for n, d in enumerate(described):
         label, spec = d["label"], d["spec"]
@@ -143,7 +151,7 @@ def save(conn, payload: dict, groups: list[dict], file_name: str, params: dict) 
                 conn.execute("UPDATE factory SET notes=? WHERE id=?",
                              ((row["notes"] or "") + f" [not found in import of {file_name}]", f))
             stats["unmatched"].append(row["name"] if row else f)
-    summary = {"digest": dg, **{k: v for k, v in stats.items()}, "groups": len(described),
+    summary = {"digest": dg, "groups_digest": gdg, **{k: v for k, v in stats.items()}, "groups": len(described),
                "game": payload.get("game"), "params": {k: v for k, v in params.items() if k != "cut_links"}}
     conn.execute("UPDATE import_run SET summary=? WHERE id=?", (json.dumps(summary), run))
     conn.execute("UPDATE world SET save_name=?, game_build=COALESCE(game_build, ?) WHERE id=?",

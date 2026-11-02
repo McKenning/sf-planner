@@ -60,8 +60,12 @@ def net_rates(lines: list[dict]) -> tuple[dict, dict]:
             prod[k] += v
         for k, v in l["inputs"].items():
             cons[k] += v
-    outs = {k: prod[k] - cons[k] for k in prod if prod[k] - cons[k] > 1e-6}
-    needs = {k: cons[k] - prod[k] for k in cons if cons[k] - prod[k] > 1e-6 and not rc.is_raw(k)}
+    # An intermediate that the group makes AND uses is "balanced" when the difference is rounding noise
+    # (clocks are stored to 3 decimals): ignore it below 0.1 % of what flows through, so it does not show up
+    # as a phantom 0.00/min output (and a phantom planned line). Final products (never consumed) always count.
+    tol = lambda k: 1e-6 + 0.001 * max(prod[k], cons[k]) if (prod[k] > 0 and cons[k] > 0) else 1e-6
+    outs = {k: prod[k] - cons[k] for k in prod if prod[k] - cons[k] > tol(k)}
+    needs = {k: cons[k] - prod[k] for k in cons if cons[k] - prod[k] > tol(k) and not rc.is_raw(k)}
     return outs, needs
 
 
