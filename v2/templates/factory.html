@@ -100,7 +100,7 @@
       {% if editable %}
       <td colspan="2">
         <form method="post" action="/factory/{{ f.id }}/override" class="inline">
-          <input type="hidden" name="item" value="{{ l["items"][0] }}"><input type="hidden" name="recipe" value="{{ l.recipe }}">
+          <input type="hidden" name="item" value="{{ l["items"][0] }}"><input type="hidden" name="keep_recipe" value="1">
           <input type="number" name="clock_pct" value="{{ '%g'|format(l.target_clock_pct) }}" step="any" min="1" max="250" aria-label="Clock percent" class="short">
           <input type="number" name="sloops" value="{{ l.sloops }}" min="0" step="1" aria-label="Somersloops per machine" class="short">
           <button>Apply</button></form>

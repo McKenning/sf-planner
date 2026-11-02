@@ -166,11 +166,21 @@ def delete_output(fid: int, item: str = Form(...)):
 
 @router.post("/factory/{fid}/override")
 def set_override(fid: int, item: str = Form(...), recipe: str = Form(""), clock_pct: str = Form(""),
-                 sloops: str = Form("")):
-    """Set recipe / clock / sloops for an item's line. Blank recipe = default; blank clock = 100%."""
+                 sloops: str = Form(""), keep_recipe: str = Form("")):
+    """Set recipe / clock / sloops for an item's line. Blank recipe = default; blank clock = 100%.
+    keep_recipe=1 (the inline clock/Somersloop form): leave the stored recipe alone, so a stale page in
+    another tab cannot silently revert a recipe change made there."""
     if item not in gd.items():
         raise HTTPException(400, "Unknown item")
     rec = recipe.strip() or None
+    if keep_recipe == "1":
+        c0 = db.connect()
+        try:
+            _factory(c0, fid)
+            row = c0.execute("SELECT recipe FROM factory_recipe WHERE factory_id=? AND item=?", (fid, item)).fetchone()
+        finally:
+            c0.close()
+        rec = row["recipe"] if row else None
     if rec:
         r = gd.recipes().get(rec)
         if not r or not any(o["item"] == item for o in r["outputs"]):
