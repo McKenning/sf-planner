@@ -16,6 +16,8 @@ from core import recipes as rc
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
+from app import fmt  # noqa: E402
+fmt.install(templates)
 TRANSPORTS = ("belt", "train", "drone", "truck")
 
 
@@ -308,6 +310,7 @@ def power_page(request: Request):
         for p in ov["plants"]:
             st = ledger.generator_stats(p)
             rows.append({"p": p, "generator": gens[p["generator"]]["name"], "fuel": fs.name(p["fuel"]), "st": st,
+                         "unit": "items" if gd.items()[p["fuel"]]["form"] == "RF_SOLID" else "m³",
                          "water": fs.name(st["supplemental"]) if st["supplemental"] else None,
                          "waste": fs.name(st["waste"]) if st["waste"] else None})
         options = [{"generator": k, "name": g["name"], "fuels": [{"item": f["fuel"], "name": fs.name(f["fuel"])}

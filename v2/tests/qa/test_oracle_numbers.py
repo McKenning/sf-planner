@@ -77,3 +77,29 @@ def test_case(server, case):
     set_goal(server, fid, spec["targets"], spec.get("choices"), spec.get("overrides"))
     exp = o.plan(spec["targets"], spec.get("choices"), spec.get("overrides"))
     compare(server.export(fid), exp)
+
+
+@pytest.mark.parametrize("case", ["hmf_10", "mfr_250_2", "plastic_hor_reuse", "fluid_sulfuric"])
+def test_excel_export_matches_oracle(server, case):
+    import io
+    import openpyxl
+    spec = CASES[case]
+    fid = server.new_factory("x-" + case)
+    set_goal(server, fid, spec["targets"], spec.get("choices"), spec.get("overrides"))
+    exp = o.plan(spec["targets"], spec.get("choices"), spec.get("overrides"))
+    st, body, hdr = server.get(f"/api/factory/{fid}/export.xlsx", raw=True)
+    assert st == 200 and "spreadsheetml" in hdr["Content-Type"]
+    wb = openpyxl.load_workbook(io.BytesIO(body))
+    s = {r[0]: r[1] for r in wb["Summary"].iter_rows(min_row=2, values_only=True) if r[0]}
+    assert s["Total power (MW)"] == pytest.approx(exp["power_mw"], abs=0.011)
+    assert s["Somersloops used"] == exp["sloops"]
+    lines = list(wb["Lines"].iter_rows(min_row=2, values_only=True))
+    got = {l[2]: l for l in lines}
+    assert set(got) == {l["recipe"] for l in exp["lines"]}
+    for l in exp["lines"]:
+        g = got[l["recipe"]]
+        assert g[4] == l["count"] and g[5] == pytest.approx(l["clock"], abs=0.0011) and g[6] == l["sloops"]
+        assert g[7] == pytest.approx(l["power"], abs=0.0011)
+    for k, v in exp["raws"].items():
+        raw = {r[0]: r[1] for r in wb["Summary"].iter_rows(values_only=True) if r[0]}
+        assert raw[k] == pytest.approx(v, abs=0.0011), k

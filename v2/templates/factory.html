@@ -14,7 +14,7 @@
 </details>
 
 <section class="strip">
-  <div><span class="label">Power</span><span class="big">{{ "%.1f"|format(res.power_mw) }} MW</span></div>
+  <div><span class="label">Power</span><span class="big">{{ res.power_mw|n1 }} MW</span></div>
   <div><span class="label">Somersloops used</span><span class="big">{{ res.sloops_total }}</span></div>
   <div><span class="label">Machines</span><span class="big">{{ res.lines|sum(attribute='count') }}</span></div>
   <div><span class="label">Raw inputs</span><span class="big">{{ res.raws|length }}</span></div>

@@ -46,7 +46,7 @@
         </table></details></td>
       <td class="num">{{ l.count }}× {{ l.machine_name }}</td>
       <td>{% for fid, fname in l.assigned %}<a href="/factory/{{ fid }}">{{ fname }}</a>{% if not loop.last %}, {% endif %}{% else %}<span class="pill">Unassigned</span>{% endfor %}</td>
-      <td><form method="post" action="/goals/assign" class="inline">
+      <td><form method="post" action="/goals/assign" class="stack">
         <input type="hidden" name="item" value="{{ l.item }}">
         <select name="factory_id" aria-label="Factory"><option value="">New factory…</option>{% for f in facs %}<option value="{{ f.id }}">{{ f.name }}</option>{% endfor %}</select>
         <input name="new_name" placeholder="New factory name" aria-label="New factory name">

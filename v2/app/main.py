@@ -20,6 +20,8 @@ from core.power import machine_power_mw  # noqa: F401  (used from Phase 2)
 
 ROOT = Path(__file__).resolve().parent.parent
 templates = Jinja2Templates(directory=str(ROOT / "templates"))
+from app import fmt  # noqa: E402
+fmt.install(templates)
 
 
 def seed_from_1x() -> None:

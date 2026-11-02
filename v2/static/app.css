@@ -80,3 +80,10 @@ nav.side .tools button { background:transparent; color:var(--fg); border-color:v
 .kbd { font:12px monospace; border:1px solid var(--line); border-radius:4px; padding:0 5px; color:var(--muted); }
 summary { box-sizing:border-box; min-height:44px; display:flex; align-items:center; }
 details > summary { min-height:44px; display:flex; align-items:center; }
+
+/* QA: links inside the main pane are touch targets too (>= 40 px), and the goals Split form stacks so it is not clipped at 1024 px */
+main a:not(.btn) { display:inline-block; min-height:40px; line-height:40px; }
+main .note a, main li a { line-height:inherit; }
+main td a, main h2 a, main h3 a { padding:0; }
+form.stack { display:flex; flex-direction:column; align-items:stretch; gap:6px; min-width:170px; }
+form.stack select, form.stack input:not([type=checkbox]) { width:100%; }

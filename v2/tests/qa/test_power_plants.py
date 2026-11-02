@@ -33,10 +33,10 @@ def test_generator_row(server, gen, fuel, count, clock, waste):
     page = server.get("/power")[1]
     row = [c for c, v in rows(page) if c[0] == name][0]
     exp = o.generator(gen, fuel, count, clock, waste)
-    mw, fuel_pm = float(row[5].replace(",", "")), float(row[6].replace(",", ""))
+    mw, fuel_pm = float(row[5].replace(",", "").split()[0]), float(row[6].replace(",", "").split()[0])
     assert mw == pytest.approx(exp["mw"], abs=0.5)           # page shows whole MW
     assert fuel_pm == pytest.approx(exp["fuel_per_min"], abs=0.011)
     if exp["water_m3_per_min"]:
-        assert float(row[7]) == pytest.approx(exp["water_m3_per_min"], abs=0.06)
+        assert float(row[7].split()[0]) == pytest.approx(exp["water_m3_per_min"], abs=0.06)
     if waste:
         assert float(row[8].split()[0]) == pytest.approx(exp["waste_per_min"], abs=0.06)

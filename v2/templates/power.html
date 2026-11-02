@@ -2,9 +2,9 @@
 {% block main %}
 <h1>Power</h1>
 <section class="strip">
-  <div><span class="label">Generated</span><span class="big">{{ "%.0f"|format(ov.gen_mw) }} MW</span></div>
-  <div><span class="label">Used by factories</span><span class="big">{{ "%.0f"|format(ov.used_mw) }} MW</span></div>
-  <div><span class="label">Balance</span><span class="big {{ 'bad' if ov.used_mw > ov.gen_mw }}">{{ "%+.0f"|format(ov.gen_mw - ov.used_mw) }} MW</span>
+  <div><span class="label">Generated</span><span class="big">{{ ov.gen_mw|n0 }} MW</span></div>
+  <div><span class="label">Used by factories</span><span class="big">{{ ov.used_mw|n0 }} MW</span></div>
+  <div><span class="label">Balance</span><span class="big {{ 'bad' if ov.used_mw > ov.gen_mw }}">{{ "+" if ov.gen_mw >= ov.used_mw else "−" }}{{ (ov.gen_mw - ov.used_mw)|abs|n0 }} MW</span>
     <span class="note">{{ "SHORT" if ov.used_mw > ov.gen_mw else "OK" }}</span></div>
 </section>
 <section class="card">
@@ -14,9 +14,9 @@
       <td><form id="pf{{ x.p.id }}" method="post" action="/power/update"><input type="hidden" name="plant_id" value="{{ x.p.id }}"></form>
         <input form="pf{{ x.p.id }}" class="short" type="number" min="1" name="count" value="{{ x.p.count }}" aria-label="Count"></td>
       <td><input form="pf{{ x.p.id }}" class="short" type="number" min="1" max="250" step="any" name="clock_pct" value="{{ '%g'|format(x.p.clock_pct) }}" aria-label="Clock percent"></td>
-      <td class="num">{{ "%.0f"|format(x.st.mw) }}</td><td class="num">{{ "%.2f"|format(x.st.fuel_per_min) }}</td>
-      <td class="num">{{ "%.1f"|format(x.st.supplemental_per_min) if x.water else "—" }}</td>
-      <td class="num">{{ "%.1f"|format(x.st.waste_per_min) ~ " " ~ x.waste if x.waste else "—" }}</td>
+      <td class="num">{{ x.st.mw|n0 }} MW</td><td class="num">{{ "%.2f"|format(x.st.fuel_per_min) }} {{ x.unit }}</td>
+      <td class="num">{{ ("%.1f m³ "|format(x.st.supplemental_per_min) ~ x.water) if x.water else "—" }}</td>
+      <td class="num">{{ ("%.1f items "|format(x.st.waste_per_min) ~ x.waste) if x.waste else "—" }}</td>
       <td><button form="pf{{ x.p.id }}">Save</button>
         <form method="post" action="/power/delete" class="inline"><input type="hidden" name="plant_id" value="{{ x.p.id }}"><button class="quiet">Remove</button></form></td></tr>
     {% else %}<tr><td colspan="10">No power plants.</td></tr>{% endfor %}

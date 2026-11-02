@@ -5,8 +5,8 @@
 
 <section class="strip">
   <div><span class="label">Power used / generated</span>
-    <span class="big {{ 'bad' if ov.used_mw > ov.gen_mw }}">{{ "%.0f"|format(ov.used_mw) }} / {{ "%.0f"|format(ov.gen_mw) }} MW</span>
-    <span class="note">{{ "Short by %.0f MW"|format(ov.used_mw - ov.gen_mw) if ov.used_mw > ov.gen_mw else "Surplus %.0f MW"|format(ov.gen_mw - ov.used_mw) }}{% if ov.power_goal %} · goal {{ "%.0f"|format(ov.power_goal) }} MW{% endif %}</span></div>
+    <span class="big {{ 'bad' if ov.used_mw > ov.gen_mw }}">{{ ov.used_mw|n0 }} / {{ ov.gen_mw|n0 }} MW</span>
+    <span class="note">{{ ("Short by " ~ (ov.used_mw - ov.gen_mw)|n0 ~ " MW") if ov.used_mw > ov.gen_mw else ("Surplus " ~ (ov.gen_mw - ov.used_mw)|n0 ~ " MW") }}{% if ov.power_goal %} · goal {{ "%.0f"|format(ov.power_goal) }} MW{% endif %}</span></div>
   <div><span class="label">Factories</span><span class="big">{{ ov.factories|selectattr("status", "in", ["planned","built"])|list|length }}</span></div>
   <div><span class="label">Flows</span><span class="big">{{ flows|length }}</span></div>
   <div><span class="label">Warnings</span><span class="big {{ 'bad' if ov.warnings }}">{{ ov.warnings|length }}</span></div>
@@ -51,7 +51,7 @@
 <h2>Factories</h2>
 {% for f in ov.factories %}
 <section class="card"><h3><a href="/factory/{{ f.id }}">{{ f.name }}</a> <span class="tag">{{ f.status }}</span></h3>
-  <p><strong>{{ "%.1f"|format(f.power_mw) }} MW</strong> · {{ f.machines }} machines · {{ f.sloops }} Somersloops
+  <p><strong>{{ f.power_mw|n1 }} MW</strong> · {{ f.machines }} machines · {{ f.sloops }} Somersloops
   {% for item, r in f.outputs.items() %}<br>{{ name(item) }} {{ rate(r) }}{% endfor %}</p></section>
 {% else %}<p>No factories yet. Start in <a href="/goals">Goals</a> or <a href="/factories">Factories</a>.</p>{% endfor %}
 

@@ -15,6 +15,8 @@ from core import importer as im
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
+from app import fmt  # noqa: E402
+fmt.install(templates)
 
 
 def _num(v):

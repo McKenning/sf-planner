@@ -13,6 +13,8 @@ from core.power import machine_power_mw
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
+from app import fmt  # noqa: E402
+fmt.install(templates)
 
 
 def _score(q: str, name: str):
