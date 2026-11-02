@@ -116,9 +116,13 @@ def save(conn, payload: dict, groups: list[dict], file_name: str, params: dict) 
                                                         p["count"], p["clock_pct"], ref))
                 stats["plants"] += 1
     # flows between imported groups
+    where = {i: n for n, d in enumerate(described) for i in d["members"]}
+    long_link = float(params.get("long_link", 300))
+    cut = {(min(where[a], where[b]), max(where[a], where[b]), l) for a, b, l in payload["links"]
+           if l > long_link and a in where and b in where and where[a] != where[b]}
     rr = {"groups": [{"id": n, "label": d["label"], "outputs": d["outputs"], "needs": d["needs"],
                       "summary": d["summary"]} for n, d in enumerate(described)],
-          "cut_links": [tuple(x) for x in params.get("cut_links", [])]}
+          "cut_links": sorted(cut)}
     for fl in im.transport_flows(rr):
         a, b = gid_to_factory.get(fl["from"]), gid_to_factory.get(fl["to"])
         if not a or not b or a == b:

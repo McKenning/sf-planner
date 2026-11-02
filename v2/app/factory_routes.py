@@ -68,10 +68,11 @@ def factory_page(request: Request, fid: int):
             it = l["items"][0]
             picker[l["recipe"]] = fs.recipe_options(it, rate_of.get(it) or outputs.get(it, 0) or 1.0,
                                                     choices.get(it))
+        built = fs.built_vs_planned(conn, fid, res)
         out_rows = [{"item": k, "name": fs.name(k), "rate": v} for k, v in outputs.items()]
         item_names = sorted(gd.items()[i]["name"] for i in rc.producers() if i in gd.items())
         ctx = dict(nav="factories", f=f, outputs=out_rows, res=p, picker=picker,
-                   item_names=item_names, editable=f["status"] != "archived",
+                   item_names=item_names, editable=f["status"] != "archived", built=built,
                    by_stage={})
         for l in p["lines"]:
             ctx["by_stage"].setdefault(l["stage"], []).append(l)

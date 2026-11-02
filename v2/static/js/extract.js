@@ -21,6 +21,11 @@ const ownerOf = (p) => p.substring(0, p.lastIndexOf('.'));
 const num = (prop, d) => (prop && typeof prop.value === 'number' ? prop.value : d);
 const vlen = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 
+export const wantEntity = (typePath) => kindOf(clsOf(typePath))[0] !== null;
+// connection components carry mConnectedComponent; an extractor's OutputInventory names its resource
+export const wantComponent = (instanceName, typePath) =>
+  /ConnectionComponent|PipeConnection|FGFactoryConnection/.test(typePath) || instanceName.endsWith('.OutputInventory');
+
 function kindOf(cls) {
   if (MACHINE.test(cls)) return ['machine', null];
   if (EXTRACTOR.test(cls)) return ['extractor', null];

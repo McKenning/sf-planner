@@ -96,12 +96,12 @@ def test_save_reimport_idempotent_and_matching(conn):
     p = synthetic()
     gs, res = specs(p)
     with conn:
-        r1 = svc.save(conn, p, gs, "a.sav", {"cut_links": res["cut_links"]})
+        r1 = svc.save(conn, p, gs, "a.sav", {})
     assert r1["created"] == 2 and not r1["unchanged"]
     n_f = conn.execute("select count(*) from factory").fetchone()[0]
     lines = conn.execute("select count(*) from production_line").fetchone()[0]
     with conn:
-        r2 = svc.save(conn, p, gs, "a.sav", {"cut_links": res["cut_links"]})
+        r2 = svc.save(conn, p, gs, "a.sav", {})
     assert r2["unchanged"]
     assert conn.execute("select count(*) from factory").fetchone()[0] == n_f
     # modified save: clocks changed + one new machine -> same factories updated, none created
@@ -111,7 +111,7 @@ def test_save_reimport_idempotent_and_matching(conn):
     p2["links"].append([2, len(p2["buildings"]) - 1, 8])
     gs2, res2 = specs(p2)
     with conn:
-        r3 = svc.save(conn, p2, gs2, "b.sav", {"cut_links": res2["cut_links"]})
+        r3 = svc.save(conn, p2, gs2, "b.sav", {})
     assert r3["created"] == 0 and r3["updated"] == 2, r3
     assert conn.execute("select count(*) from factory").fetchone()[0] == n_f
     row = conn.execute("select count, clock_pct from production_line pl join factory f on f.id=pl.factory_id "
@@ -122,7 +122,7 @@ def test_save_reimport_idempotent_and_matching(conn):
     p3 = copy.deepcopy(p2)
     p3["buildings"][3]["clock"] = 0.5
     with conn:
-        r4 = svc.save(conn, p3, gs3, "c.sav", {"cut_links": []})
+        r4 = svc.save(conn, p3, gs3, "c.sav", {})
     assert conn.execute("select count(*) from factory").fetchone()[0] == n_f
     assert r4["unmatched"]
 
@@ -135,7 +135,7 @@ def test_attach_to_planned_factory(conn):
     plates = next(g for g in gs if "Iron Plate" in g["name"] or "Plate" in g["name"])
     plates["attach_factory_id"] = 1
     with conn:
-        r = svc.save(conn, p, gs, "a.sav", {"cut_links": res["cut_links"]})
+        r = svc.save(conn, p, gs, "a.sav", {})
     assert r["attached"] == 1
     assert conn.execute("select count(*) from production_line where factory_id=1").fetchone()[0] >= 1
     assert conn.execute("select status from factory where id=1").fetchone()[0] == "planned"
@@ -180,12 +180,38 @@ def test_mk1_acceptance_hmf_factory(mk1):
 def test_mk1_save_and_reimport_changes_nothing(mk1, conn):
     gs, res = specs(mk1)
     with conn:
-        r1 = svc.save(conn, mk1, gs, "MK1-2i.sav", {"cut_links": res["cut_links"]})
+        r1 = svc.save(conn, mk1, gs, "MK1-2i.sav", {})
     assert r1["created"] >= 8 and r1["plants"] >= 1
     snap = [conn.execute(f"select count(*) from {t}").fetchone()[0]
             for t in ("factory", "production_line", "flow", "power_plant", "factory_output")]
     with conn:
-        r2 = svc.save(conn, mk1, gs, "MK1-2i.sav", {"cut_links": res["cut_links"]})
+        r2 = svc.save(conn, mk1, gs, "MK1-2i.sav", {})
     assert r2["unchanged"]
     assert snap == [conn.execute(f"select count(*) from {t}").fetchone()[0]
                     for t in ("factory", "production_line", "flow", "power_plant", "factory_output")]
+
+
+def test_m1_stress_parses_fast():
+    """The 34 MB save parses in well under 30 s (node, same bundle and patches as the browser worker)."""
+    big = Path.home() / "sf-inputs/saves/M1-8m.sav"
+    if not (big.exists() and NODE and HAVE_NODE_PARSER):
+        pytest.skip("M1-8m.sav or node parser not available")
+    import time
+    t = time.time()
+    r = subprocess.run([NODE, str(ROOT / "tools/extract_save.mjs"), str(big)], capture_output=True, timeout=120)
+    assert r.returncode == 0, r.stderr[-500:]
+    assert time.time() - t < 30
+    assert b"27264 buildings" in r.stderr or b"buildings" in r.stderr
+
+
+def test_built_vs_planned(conn):
+    from app import factory_service as fs
+    p = synthetic()
+    gs, res = specs(p)
+    with conn:
+        svc.save(conn, p, gs, "a.sav", {})
+    fid = conn.execute("select factory_id from production_line where recipe='Recipe_IronPlate_C'").fetchone()[0]
+    _o, _c, _ov, sol = fs.solve_factory(conn, fid)
+    rows = fs.built_vs_planned(conn, fid, sol)
+    plates = next(r for r in rows if r["recipe"] == "Iron Plate")
+    assert plates["built"] == 3 and plates["planned"] == 3 and plates["gap"] == 0

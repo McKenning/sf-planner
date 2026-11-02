@@ -61,6 +61,24 @@ def present(res: dict) -> dict:
     }
 
 
+def built_vs_planned(conn, factory_id: int, res: dict) -> list[dict]:
+    """Per recipe: machines planned by the solver vs machines built (from a save import)."""
+    built = {}
+    for r in conn.execute("SELECT recipe, machine, SUM(count) AS n FROM production_line WHERE factory_id=? "
+                          "GROUP BY recipe, machine", (factory_id,)):
+        built[r["recipe"]] = {"machine": r["machine"], "built": r["n"]}
+    if not built:
+        return []
+    rows, planned = [], {l["recipe"]: l for l in res["lines"]}
+    for rcls in sorted(set(built) | set(planned), key=lambda x: gd.recipes()[x]["name"]):
+        rec = gd.recipes()[rcls]
+        b = built.get(rcls, {}).get("built", 0)
+        p = planned[rcls]["count"] if rcls in planned else 0
+        rows.append({"recipe": rec["name"], "machine": gd.buildings()[rec["machine"]]["name"],
+                     "built": b, "planned": p, "gap": b - p})
+    return rows
+
+
 def recipe_options(item: str, rate: float, current: str | None) -> list[dict]:
     """Side-by-side comparison of every recipe that makes `item`, at `rate`/min (one step, 100% clock)."""
     out = []

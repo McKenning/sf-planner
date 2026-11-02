@@ -86,7 +86,6 @@ async def save(request: Request):
     if not groups or not all(isinstance(g.get("ids"), list) for g in groups):
         raise HTTPException(400, "No groups to save")
     params = dict(body.get("params") or {})
-    params["cut_links"] = body.get("cut_links") or []
     conn = db.connect()
     try:
         with conn:

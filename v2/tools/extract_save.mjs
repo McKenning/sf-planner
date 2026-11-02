@@ -4,8 +4,12 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
 const here = path.dirname(fileURLToPath(import.meta.url));
-const { Parser } = await import(path.join(here, 'vendor/node_modules/@etothepii/satisfactory-file-parser/build/index.js'));
+// same bundle + same patches as the browser worker, so tests exercise the shipped code
+const P = await import(path.join(here, '../static/vendor/satisfactory-file-parser.bundle.js'));
 const { extract } = await import(path.join(here, '../static/js/extract.js'));
+const { installFast } = await import(path.join(here, '../static/js/selective.js'));
+const { Parser } = P;
+installFast(P);
 const buf = fs.readFileSync(process.argv[2]);
 const t0 = Date.now();
 const save = Parser.ParseSave('save', buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));

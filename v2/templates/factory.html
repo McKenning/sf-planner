@@ -49,6 +49,16 @@
   <table>{% for n, v in res.surplus %}<tr><td>{{ n }}</td><td class="num">{{ "%.2f"|format(v) }} / min</td></tr>{% endfor %}</table>{% endif %}
 </section>
 
+{% if built %}
+<section class="card">
+  <h2>Built vs planned <span class="note">(machines from the last save import vs what the plan needs)</span></h2>
+  <table><tr><th>Recipe</th><th>Machine</th><th>Built</th><th>Planned</th><th>Gap</th></tr>
+  {% for b in built %}<tr><td>{{ b.recipe }}</td><td>{{ b.machine }}</td><td class="num">{{ b.built }}</td><td class="num">{{ b.planned }}</td>
+    <td class="num">{% if b.gap < 0 %}<span class="pill bad">SHORT {{ -b.gap }}</span>{% elif b.gap > 0 %}<span class="pill">Extra {{ b.gap }}</span>{% else %}<span class="pill ok">Matches</span>{% endif %}</td></tr>{% endfor %}
+  </table>
+</section>
+{% endif %}
+
 <h2>Production lines <span class="note">(raw → final; clock and Somersloops edited inline)</span></h2>
 {% for stage, lines in by_stage|dictsort %}
 <section class="card">

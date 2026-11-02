@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>Import a save <span class="note">built factories from a Satisfactory .sav</span></h1>
+<p class="note">The save is read in your browser; only a compact building list is sent to the server.</p>
+
+<section class="card">
+  <h2>1. Choose a save</h2>
+  <input type="file" id="file" accept=".sav" aria-label="Satisfactory save file">
+  <progress id="bar" max="100" value="0" hidden></progress>
+  <p id="status" class="note" role="status">No file chosen.</p>
+</section>
+
+<div id="review" hidden>
+  <section class="card">
+    <h2>2. Grouping <span class="note">compared side by side</span></h2>
+    <div class="sliders">
+      <label>Distance threshold <input type="range" id="threshold" min="20" max="200" step="5" value="60"> <output id="threshold-val">60 m</output></label>
+      <label>Long belt = flow, over <input type="range" id="long_link" min="100" max="1000" step="25" value="300"> <output id="long_link-val">300 m</output></label>
+    </div>
+    <div class="cols">
+      <div><h3>By connection <span class="note" id="count-connection"></span></h3>
+        <svg id="plot-connection" class="plot" role="img" aria-label="Top-down plot, grouped by connection"></svg>
+        <ul id="list-connection" class="glist"></ul><button id="use-connection">Use connection grouping</button></div>
+      <div><h3>By distance <span class="note" id="count-distance"></span></h3>
+        <svg id="plot-distance" class="plot" role="img" aria-label="Top-down plot, grouped by distance"></svg>
+        <ul id="list-distance" class="glist"></ul><button id="use-distance">Use distance grouping</button></div>
+    </div>
+  </section>
+
+  <section class="card" id="edit" hidden>
+    <h2>3. Review <span class="note">rename, relabel, merge, split, attach to a planned factory</span></h2>
+    <svg id="plot-edit" class="plot wide" role="img" aria-label="Top-down plot of the groups to import"></svg>
+    <p><button id="merge">Merge ticked</button> <span id="summary-edit" class="note"></span></p>
+    <table class="lines">
+      <tr><th></th><th>Name</th><th>Type</th><th>Machines</th><th>Extractors</th><th>Generators</th><th>Power</th><th>Makes</th><th>Attach to</th><th></th><th></th></tr>
+      <tbody id="rows"></tbody>
+    </table>
+    <p><button id="save">Save import</button></p>
+    <p id="result" class="card" hidden></p>
+  </section>
+</div>
+
+<section class="card">
+  <h2>Previous imports</h2>
+  {% for r in runs %}<p>{{ r.file_name }} — {{ r.imported_at }}</p>{% else %}<p class="note">None yet.</p>{% endfor %}
+</section>
+<script id="factories-json" type="application/json">{{ factories|tojson }}</script>
+<script type="module" src="/static/js/import.js"></script>
+{% endblock %}
