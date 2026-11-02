@@ -41,3 +41,22 @@ Newest entries at the bottom. One entry per step: date/time (MT), what changed, 
 - Added `v2/tools/test312.sh`: runs pytest in `python:3.12-slim` (repo read-only, `~/sf-inputs` mounted so nothing is skipped). **Run before every deploy.** Result now: 17 passed on 3.12.16 (also 17 on 3.14 locally).
 - 1.x re-import: a fresh import into a clean DB gives identical results to before (183 override rows; only sloop override is Ficsite Trigon = 1, a Constructor item). No 1.x item with a sloop override is a Smelter item, so no stored values change. The importer is idempotent, so re-running it on docker02's existing DB is a no-op by design; I did not delete docker02 data.
 - Deployed via pull + restart; see verification below.
+
+## 2026-11-01 — Phase 2, step 1: solver + 1.x parity
+
+- Added `core/recipes.py` (planner-recipe filter, default recipe — same priority rules as 1.x, ported to Docs class data), `core/solver.py` (pure; one line per chosen recipe, byproduct credits, shared recipes, loops via Gauss–Seidel fixed point, sloops as integer count, even clock distribution, power from `core/power.py`), `tools/parity_1x.py` (runs 1.x's `backend/solver.py` read-only against the 1.x DB copy and diffs per item), tests (`test_solver.py`, `test_parity.py`).
+- Importer fix found by parity: 1.x merges the active plan's clock overrides under every factory's own; the importer now does the same (factory value wins). Existing deployed DB is backfilled once at startup (fill-only, never overwrites; marker `PRAGMA user_version=1`).
+- **Parity result (all 4 imported 1.x factories):** `docs/PARITY-1x-stock.md` / `docs/PARITY-1x-tight.md`.
+  - vs stock 1.x: Heavy Modular Frames identical. The three fuel-rod factories differ only in the Rubber/Plastic/Heavy Oil Residue/Fuel loop (+ resulting Crude Oil and Water raws), by ≤0.3% (e.g. Rubber 979.85 vs 980.00/min, Plutonium Crude Oil 537.3 vs 538.2). **Cause:** 1.x stops iterating at 0.01% total change and 50 iterations, so its loop answer is under-converged; 2.0 solves the loop exactly (balances to 1e-11).
+  - vs 1.x with only its tolerance tightened (same code, read in memory): **all four factories identical** — every item rate, machine count, clock % and raw total. `test_parity_with_1x_solver_at_tight_tolerance` pins this.
+  - Power differs as expected (linear in 1.x, 1.1 formula in 2.0): Plutonium 67 188 → 63 557 MW, Ficsonium 130 607 → 114 688, Uranium 26 326 → 27 500, HMF 7 640 → 9 969.
+  - 2.0 additionally reports byproduct **surplus** (e.g. Polymer Resin 359/min in Plutonium) which 1.x ignores.
+- pytest 25 pass on 3.14 and in the 3.12 image (`tools/test312.sh` now copies `backend/` next to the app so parity runs).
+
+### Decisions
+
+- Solver keeps one line per *recipe* (not per item): a recipe chosen for two items (e.g. both outputs of Heavy Oil Residue) is one set of machines; 1.x double-counted that case. Not present in current data, so parity unaffected.
+- Loop/byproduct solve by Gauss–Seidel to 1e-11, not a matrix inverse — the balance is piecewise linear (credits floor at 0); no solver library needed (plan).
+- Parity compares against 1.x with tightened tolerance as the pass criterion and lists the stock-1.x deltas with their cause — comparing to an under-converged answer would pin a 1.x defect.
+- Plan-level 1.x clock overrides merged into every factory on import (matches 1.x's factory view); backfill is fill-only and one-shot.
+- Raw = raw resources plus anything no planner recipe makes (leaves, slugs, alien protein, power shards) — covers 1.x's TREAT_AS_RAW without a hand-typed list.

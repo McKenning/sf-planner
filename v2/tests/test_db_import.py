@@ -32,9 +32,17 @@ def test_import_1x_all_present_and_idempotent(tmp_path):
     assert c.execute("select status from factory where name='1.x plan (archived)'").fetchone()[0] == "archived"
     assert c.execute("select count(*) from power_plant").fetchone()[0] == n_pp
     # overrides preserved
-    n_clk = (src.execute("select count(*) from factory_clock_overrides").fetchone()[0]
-             + src.execute("select count(*) from clock_overrides").fetchone()[0])
-    assert c.execute("select count(clock_pct) from factory_recipe").fetchone()[0] == n_clk
+    plan = {r[0] for r in src.execute("select product from clock_overrides")}
+    expected = len(plan)  # archived scratchpad keeps the plan-level clocks
+    for fid, in src.execute("select id from factories"):
+        own = {r[0] for r in src.execute("select product from factory_clock_overrides where factory_id=?", (fid,))}
+        expected += len(own | plan)  # 1.x merges plan clocks under each factory's own
+    assert c.execute("select count(clock_pct) from factory_recipe").fetchone()[0] == expected
+    # factory-level value wins over the plan-level one
+    for fid, prod, clk in src.execute("select factory_id, product, clock_pct from factory_clock_overrides"):
+        assert c.execute("select clock_pct from factory_recipe fr join factory f on f.id=fr.factory_id "
+                         "where f.source_ref=? and fr.item=?",
+                         (f"1x:factory:{fid}", import_1x._item(prod))).fetchone()[0] == clk
     again = import_1x.run(SRC, p)
     assert again["factories"] == 0 and again["power_plants"] == 0
 

@@ -26,10 +26,12 @@ def seed_from_1x() -> None:
         return
     conn = db.connect()
     try:
-        if conn.execute("SELECT 1 FROM world LIMIT 1").fetchone():
-            return
+        has_world = conn.execute("SELECT 1 FROM world LIMIT 1").fetchone()
+        done = conn.execute("PRAGMA user_version").fetchone()[0] >= 1
     finally:
         conn.close()
+    if has_world and done:
+        return  # imported already; run() would be a no-op and must not resurrect deleted factories
     from tools import import_1x
     with tempfile.TemporaryDirectory() as tmp:
         copy = Path(tmp) / "planner-1x.db"
@@ -40,6 +42,11 @@ def seed_from_1x() -> None:
         s.close()
         d.close()
         print("1.x import:", import_1x.run(copy))
+    conn = db.connect()
+    try:
+        conn.execute("PRAGMA user_version = 1")  # one-shot marker (v1 = 1.x import incl. plan-clock merge)
+    finally:
+        conn.close()
 
 
 @asynccontextmanager

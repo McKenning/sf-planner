@@ -57,10 +57,34 @@ def _world(conn) -> int:
                         (WORLD, gd.load()["build"])).lastrowid
 
 
+def _plan_clocks(src) -> list:
+    """1.x merges the active (first) plan's clock overrides under every factory's own."""
+    row = src.execute("SELECT id FROM plans ORDER BY id LIMIT 1").fetchone()
+    return list(src.execute("SELECT product, clock_pct FROM clock_overrides WHERE plan_id=?",
+                            (row["id"],))) if row else []
+
+
+def _backfill_plan_clocks(conn, src, fid):
+    """Fill-only: plan-level clock for items the factory has no clock for (never overwrites)."""
+    n = 0
+    for r in _plan_clocks(src):
+        item = _item(r["product"])
+        cur = conn.execute("UPDATE factory_recipe SET clock_pct=? WHERE factory_id=? AND item=? "
+                           "AND clock_pct IS NULL", (r["clock_pct"], fid, item)).rowcount
+        if not cur:
+            cur = conn.execute("INSERT OR IGNORE INTO factory_recipe(factory_id, item, clock_pct) "
+                               "VALUES (?,?,?)", (fid, item, r["clock_pct"])).rowcount
+        n += cur
+    return n
+
+
 def _import_container(conn, src, world_id, *, ref, name, status, outputs_sql, choices_sql,
-                      clock_sql, sloop_sql, key, stats):
-    if conn.execute("SELECT 1 FROM factory WHERE source_ref = ?", (ref,)).fetchone():
+                      clock_sql, sloop_sql, key, stats, merge_plan_clocks=False):
+    existing = conn.execute("SELECT id FROM factory WHERE source_ref = ?", (ref,)).fetchone()
+    if existing:
         stats["skipped"] += 1
+        if merge_plan_clocks:
+            stats["backfilled"] = stats.get("backfilled", 0) + _backfill_plan_clocks(conn, src, existing["id"])
         return
     fid = conn.execute(
         "INSERT INTO factory(world_id, name, status, origin, source_ref) VALUES (?,?,?, 'import', ?)",
@@ -73,9 +97,12 @@ def _import_container(conn, src, world_id, *, ref, name, status, outputs_sql, ch
         over.setdefault(_item(r["product"]), {})["recipe"] = _recipe(r["recipe"])
     for r in src.execute(clock_sql, (key,)):
         over.setdefault(_item(r["product"]), {})["clock_pct"] = r["clock_pct"]
+    if merge_plan_clocks:
+        for r in _plan_clocks(src):
+            over.setdefault(_item(r["product"]), {}).setdefault("clock_pct", r["clock_pct"])
     for r in src.execute(sloop_sql, (key,)):
         item = _item(r["product"])
-        over.setdefault(item, {})["sloops"] = _full_slots(item, over[item].get("recipe")) if r["slooped"] else 0
+        over.setdefault(item, {})["sloops"] = _full_slots(item, over.setdefault(item, {}).get("recipe")) if r["slooped"] else 0
     for item, o in over.items():
         conn.execute("INSERT INTO factory_recipe(factory_id, item, recipe, clock_pct, sloops) "
                      "VALUES (?,?,?,?,?)",
@@ -99,7 +126,7 @@ def run(src_path: Path | str, dest_path: Path | str | None = None) -> dict:
                     choices_sql="SELECT product, recipe FROM factory_choices WHERE factory_id=?",
                     clock_sql="SELECT product, clock_pct FROM factory_clock_overrides WHERE factory_id=?",
                     sloop_sql="SELECT product, slooped FROM factory_sloop_overrides WHERE factory_id=?",
-                    key=f["id"], stats=stats)
+                    key=f["id"], stats=stats, merge_plan_clocks=True)
             # the 1.x scratchpad(s) -> archived draft factory
             for p in src.execute("SELECT id FROM plans ORDER BY id"):
                 before = stats["factories"]
