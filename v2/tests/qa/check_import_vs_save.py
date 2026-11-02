@@ -54,7 +54,7 @@ for fid, ms in sorted(fac.items(), key=lambda kv: -len(kv[1]))[:6]:
             cons[i] += a * cpm / o.unit(i)
         for i, a in R["out"]:
             prod[i] += a * boost * cpm / o.unit(i)
-    exp = {D["items"][i]["name"]: prod[i] - cons[i] for i in prod if prod[i] - cons[i] > 1e-6}
+    exp = {D["items"][i]["name"]: prod[i] - cons[i] for i in prod if prod[i] - cons[i] > 0.011}   # below 0.011/min = rounding noise of 3-decimal clocks
     got = {}
     for oo in c.execute("SELECT item, rate_per_min FROM factory_output WHERE factory_id=?", (fid,)):
         got[D["items"][oo["item"]]["name"]] = oo["rate_per_min"]

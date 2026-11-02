@@ -8,6 +8,7 @@ from playwright.sync_api import sync_playwright
 
 BASE = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8043"
 SHOTS = Path(sys.argv[2]) if len(sys.argv) > 2 else Path("/tmp")
+PHASE = sys.argv[3] if len(sys.argv) > 3 else "all"   # mk | m1 | all  (m1 = the 34 MB save, run on its own to keep Chromium small)
 SAVES = Path.home() / "sf-inputs/saves"
 res = []
 
@@ -39,12 +40,18 @@ def save(pg):
     return pg.inner_text("#result")
 
 
-with sync_playwright() as p:
+def browser(p):
     b = p.chromium.launch()
     pg = b.new_page(viewport={"width": 1440, "height": 900})
     errs = []
     pg.on("console", lambda m: errs.append(m.text) if m.type == "error" else None)
     pg.on("pageerror", lambda e: errs.append(str(e)))
+    return b, pg, errs
+
+
+with sync_playwright() as p:
+  if PHASE in ("mk", "all"):
+    b, pg, errs = browser(p)
     pg.goto(BASE + "/import")
     st, secs = load(pg, "MK1-2i.sav")
     check("MK1-2i parses and groups", st.startswith("Grouped"), st)
@@ -79,10 +86,16 @@ with sync_playwright() as p:
     # re-import same save with default grouping: expect no changes, nothing duplicated
     pg.goto(BASE + "/import")
     count_before = len(pg.context.request.get(BASE + "/factories").text())
+    # (the first save was hand-edited, so the first default-grouping import legitimately differs; the second must be a no-op)
     load(pg, "MK1-2i.sav")
     pg.click("#use-connection")
     msg = save(pg)
-    check("re-import of the same save says No changes", "No changes" in msg, msg)
+    check("default-grouping import after hand-edited one is processed (grouping differs)", "No changes" not in msg, msg)
+    pg.goto(BASE + "/import")
+    load(pg, "MK1-2i.sav")
+    pg.click("#use-connection")
+    msg = save(pg)
+    check("re-import of the same save with the same grouping says No changes", "No changes" in msg, msg)
     # same save, user changes the grouping (distance) -> should not be silently ignored
     pg.goto(BASE + "/import")
     load(pg, "MK1-2i.sav")
@@ -90,6 +103,11 @@ with sync_playwright() as p:
     msg = save(pg)
     print("    same save, distance grouping:", msg.replace("\n", " ")[:200])
     check("same save with DIFFERENT grouping is not reported as 'identical'", "No changes" not in msg, msg)
+    errs = [e for e in errs if "400" not in e]
+    check("no console errors (MK1-2i)", not errs, str(errs[:3]))
+    b.close()
+  if PHASE in ("m1", "all"):
+    b, pg, errs = browser(p)
     # second, different world
     pg.goto(BASE + "/import")
     st, secs = load(pg, "M1-8m.sav", timeout=300000)

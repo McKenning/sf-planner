@@ -48,7 +48,7 @@ def data() -> dict:
         by.setdefault(e["NativeClass"].split(".")[-1].rstrip("'"), []).extend(e["Classes"])
     items = {}
     for k, lst in by.items():
-        if k.startswith(("FGItemDescriptor", "FGResourceDescriptor", "FGConsumableDescriptor")):
+        if k.startswith(("FGItemDescriptor", "FGResourceDescriptor", "FGConsumableDescriptor", "FGEquipmentDescriptor", "FGAmmoType")):
             for c in lst:
                 items[c["ClassName"]] = {"name": c["mDisplayName"], "form": c.get("mForm"),
                                          "energy": float(c.get("mEnergyValue") or 0),

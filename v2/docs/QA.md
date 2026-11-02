@@ -1,6 +1,14 @@
 # SF Planner 2.0 — QA log (v2-qa1)
 
-_Summary is filled in at the end of the run._
+## Summary
+
+15 findings: 0 blocker, 6 major (QA-01, 07, 08, 09, 10, 14), 6 minor (QA-02, 03, 04, 05, 06, 11 … plus 12, 13, 15 = 9 minor), 0 cosmetic. **All 15 fixed, 0 open**, each with a regression test or a QA script check. (Majors: 6, minors: 9.)
+
+Verified clean (no defects found): numbers vs the independent oracle (UI, 84 browser checks at 1440 and 1024); MK1-2i and M1-8m through the real UI (review edit/merge/split/attach, same-save re-import = "No changes", M1-8m after MK1-2i collides with nothing, 4474/4474 and 449/449 machines, recipes, clocks, Somersloops and per-factory outputs match the independent save reader); migration 001→002 over existing data keeps rows and makes a pre-migration backup; server restart keeps data (621 factories); bad ids are 404; no tracebacks in dev or live logs; no f-string SQL, no `|safe`, export filenames are id-only.
+Observation (not a defect): with ~600 factories `/` is 618 KB (it lists every factory); fast (0.3 s) but a future paging candidate.
+Browser runs were done one Chromium at a time (peak ~2.7 GB total with M1-8m); node needs `--max-old-space-size=6000` for `save_oracle.mjs` on M1-8m.
+
+
 
 Oracle: `v2/tests/qa/oracle.py` reads the Docs file directly (no `core/`). Regression tests: `v2/tests/qa/`.
 Severity: blocker / major / minor / cosmetic. Status: fixed / open / wontfix / blocked.
